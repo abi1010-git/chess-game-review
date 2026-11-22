@@ -1,0 +1,84 @@
+[Event "Rated Blitz game"]
+[Site "Club night"]
+[Date "2025.03.01"]
+[Round "1"]
+[White "MeTheTester"]
+[Black "OpponentOne"]
+[Result "1-0"]
+[WhiteElo "1500"]
+[BlackElo "1480"]
+[TimeControl "300+0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 1-0
+
+[Event "Rated Rapid game"]
+[Site "Club night"]
+[Date "2025.03.02"]
+[Round "2"]
+[White "OpponentTwo"]
+[Black "MeTheTester"]
+[Result "1-0"]
+[WhiteElo "1520"]
+[BlackElo "?"]
+[TimeControl "600+5"]
+
+1. d4 d5 2. c4 e6 3. Nc3 Nf6 1-0
+
+[Event "Rated Blitz game"]
+[Site "Club night"]
+[Date "2025.03.01"]
+[Round "1"]
+[White "MeTheTester"]
+[Black "OpponentOne"]
+[Result "1-0"]
+[WhiteElo "1500"]
+[BlackElo "1480"]
+[TimeControl "300+0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 1-0
+
+[Event "Rated Blitz game"]
+[Site "Club night"]
+[Date "2025.03.08"]
+[Round "1"]
+[White "MeTheTester"]
+[Black "OpponentThree"]
+[Result "1/2-1/2"]
+[TimeControl "300+0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 1/2-1/2
+
+[Event "Broken game"]
+[Date "2025.03.03"]
+[White "MeTheTester"]
+[Black "OpponentFour"]
+[Result "*"]
+
+1. e4 e5 2. Qh8 Nc6 *
+
+[Event "Fischer random"]
+[Variant "Chess960"]
+[Date "2025.03.04"]
+[White "MeTheTester"]
+[Black "OpponentFive"]
+[FEN "bqnb1rkr/pp3ppp/3ppn2/2p5/5P2/P2P4/NPP1P1PP/BQ1BNRKR w HFhf - 2 9"]
+[SetUp "1"]
+[Result "*"]
+
+9. g3 Nc4 *
+
+[Event "Abandoned"]
+[Date "2025.03.05"]
+[White "MeTheTester"]
+[Black "OpponentSix"]
+[Result "*"]
+
+*
+
+[Event "Spectated"]
+[Date "2025.03.06"]
+[White "SomeoneElse"]
+[Black "AnotherPlayer"]
+[Result "0-1"]
+
+1. f3 e5 2. g4 Qh4# 0-1

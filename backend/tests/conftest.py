@@ -1,0 +1,63 @@
+from pathlib import Path
+
+import httpx
+import pytest
+from fastapi.testclient import TestClient
+
+from app import db
+from app.importers.base import RetryPolicy
+from app.main import app
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+class FakeWeb:
+    """Routes URLs (path prefix) to handler functions; records requests and sleeps."""
+
+    def __init__(self):
+        self.routes: dict[str, object] = {}
+        self.requests: list[httpx.Request] = []
+        self.sleeps: list[float] = []
+
+    def add(self, url_prefix: str, handler):
+        self.routes[url_prefix] = handler
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        url = str(request.url).split("?")[0]
+        for prefix in sorted(self.routes, key=len, reverse=True):
+            if url.startswith(prefix):
+                h = self.routes[prefix]
+                return h(request) if callable(h) else h
+        return httpx.Response(404, json={"message": "not found"})
+
+    def client(self) -> httpx.Client:
+        return httpx.Client(transport=httpx.MockTransport(self))
+
+    def retry(self) -> RetryPolicy:
+        return RetryPolicy(sleep=self.sleeps.append)
+
+
+@pytest.fixture()
+def database(tmp_path):
+    db.init_db(f"sqlite:///{(tmp_path / 'test.db').as_posix()}")
+    yield db
+    db.engine.dispose()
+
+
+@pytest.fixture()
+def web():
+    return FakeWeb()
+
+
+@pytest.fixture()
+def client(database, web):
+    app.state.http_client_factory = web.client
+    app.state.retry_factory = web.retry
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture()
+def mixed_pgn() -> bytes:
+    return (FIXTURES / "mixed_batch.pgn").read_bytes()

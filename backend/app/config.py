@@ -1,0 +1,50 @@
+"""Runtime settings, read from environment variables with local-dev defaults."""
+import os
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = Path(os.environ.get("CHESS_REVIEW_DATA_DIR", BASE_DIR / "data"))
+
+# SQLite for local development; set DATABASE_URL=postgresql+psycopg://... for PostgreSQL.
+DATABASE_URL = os.environ.get("DATABASE_URL") or f"sqlite:///{(DATA_DIR / 'app.db').as_posix()}"
+
+# Bump when the engine settings or finding logic change, so games show as needing re-analysis.
+ANALYSIS_VERSION = os.environ.get("ANALYSIS_VERSION", "v1")
+
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", 5 * 1024 * 1024))
+MAX_GAMES_PER_IMPORT = int(os.environ.get("MAX_GAMES_PER_IMPORT", 2000))
+DEFAULT_GAMES_PER_IMPORT = int(os.environ.get("DEFAULT_GAMES_PER_IMPORT", 300))
+MAX_GAMES_PER_BATCH = int(os.environ.get("MAX_GAMES_PER_BATCH", 500))
+
+# Generic client name for public chess APIs (no personal contact details).
+USER_AGENT = os.environ.get("CHESS_REVIEW_USER_AGENT", "chess-game-review/0.1 (self-hosted)")
+
+CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()]
+
+# ---------------------------------------------------------------- engine analysis (phase 2)
+# Path to a Stockfish binary. When unset, the worker looks on PATH, then in backend/engines/.
+STOCKFISH_PATH = os.environ.get("STOCKFISH_PATH") or None
+ENGINE_DIR = BASE_DIR / "engines"
+
+# Each analysis version is tied to one engine profile: a fixed engine and a fixed node budget.
+# Threads=1 and a node limit keep results reproducible on the same engine build. Change the
+# profile only together with ANALYSIS_VERSION.
+ENGINE_PROFILES: dict[str, dict] = {
+    "v1": {
+        "engine": "Stockfish 18",
+        "threads": 1,
+        "hash_mb": 64,
+        "first_nodes": 150_000,   # every position, both sides
+        "multipv": 3,             # candidate continuations stored per position
+        "deep_nodes": 600_000,    # second pass on candidate moments
+        "deep_max": 6,            # most deep checks per game
+        "stable_win_delta": 10.0, # first vs deep pass may differ by this many win-% points
+    },
+}
+ENGINE_PROFILE = ENGINE_PROFILES.get(ANALYSIS_VERSION) or ENGINE_PROFILES["v1"]
+# Allow a different engine build than the profile names (results then are not comparable).
+ENGINE_ALLOW_MISMATCH = os.environ.get("ENGINE_ALLOW_MISMATCH", "") == "1"
+WORKER_LEASE_SECONDS = int(os.environ.get("WORKER_LEASE_SECONDS", 300))
+
+# Built frontend (frontend/dist) served by the API in single-container deployments.
+FRONTEND_DIST = Path(os.environ.get("FRONTEND_DIST", BASE_DIR.parent / "frontend" / "dist"))
