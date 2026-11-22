@@ -1,6 +1,7 @@
 """Database engine and session setup. SQLite locally, PostgreSQL via DATABASE_URL."""
 from pathlib import Path
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, event, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -50,7 +51,10 @@ def init_db(url: str | None = None) -> Engine:
     with SessionLocal() as s:
         if s.scalar(select(models.Profile).where(models.Profile.id == DEFAULT_PROFILE_ID)) is None:
             s.add(models.Profile(id=DEFAULT_PROFILE_ID, name="Local player"))
-            s.commit()
+            try:
+                s.commit()
+            except IntegrityError:  # another process (API or worker) created it first
+                s.rollback()
     return engine
 
 
