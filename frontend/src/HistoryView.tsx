@@ -1,10 +1,11 @@
+import type { Tab } from "./App";
 import { useEffect, useMemo, useState } from "react";
 import { api, type Facets, type Filters, type Game, type Preview } from "./api";
 import { GameRow, GameTableHead, PROVIDER_LABEL } from "./format";
 
 const PAGE = 50;
 
-export function HistoryView({ refreshKey, onQueued, onOpen }: { refreshKey: number; onQueued: () => void; onOpen: (id: number) => void }) {
+export function HistoryView({ refreshKey, onQueued, onOpen, onGo }: { refreshKey: number; onQueued: () => void; onOpen: (id: number) => void; onGo: (t: Tab) => void }) {
   const [facets, setFacets] = useState<Facets | null>(null);
   const [filters, setFilters] = useState<Filters>({});
   const [page, setPage] = useState(0);
@@ -89,6 +90,7 @@ export function HistoryView({ refreshKey, onQueued, onOpen }: { refreshKey: numb
       <section className="card empty">
         <h2>No games yet</h2>
         <p>Import games from Lichess, Chess.com or a PGN file to see your history here.</p>
+        <button className="primary" onClick={() => onGo("import")}>Import games</button>
       </section>
     );
   }

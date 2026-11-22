@@ -13,7 +13,7 @@ const STATUS_TEXT: Record<ImportRun["status"], string> = {
   failed: "Failed",
 };
 
-export function ImportView({ onImported }: { onImported: () => void }) {
+export function ImportView({ onImported, onNext }: { onImported: () => void; onNext: () => void }) {
   const [source, setSource] = useState<Source>("lichess");
   const [runs, setRuns] = useState<ImportRun[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +50,20 @@ export function ImportView({ onImported }: { onImported: () => void }) {
     refresh();
   }
 
+  const doneWithGames = runs.some((r) => !ACTIVE.has(r.status) && r.imported + r.duplicates > 0);
+
   return (
     <div className="stack">
+      {runs.length === 0 && (
+        <section className="card intro">
+          <h2>See how your chess decisions change over time</h2>
+          <ol className="steps">
+            <li><b>Import</b> your games from Lichess, Chess.com or a PGN file.</li>
+            <li><b>Pick games</b> to analyze. Stockfish checks every move you made.</li>
+            <li><b>Read the reports</b>: what went wrong, how it compares with your earlier games, and what to study next.</li>
+          </ol>
+        </section>
+      )}
       <section className="card">
         <h2>Import games</h2>
         <div className="segmented" role="tablist">
@@ -68,6 +80,13 @@ export function ImportView({ onImported }: { onImported: () => void }) {
         )}
         {error && <p className="error">{error}</p>}
       </section>
+
+      {doneWithGames && !anyActive && (
+        <section className="card next-step">
+          <p><b>Games imported.</b> Next, choose which ones to analyze.</p>
+          <button className="primary" onClick={onNext}>Pick games to analyze →</button>
+        </section>
+      )}
 
       <section className="card">
         <h2>Recent imports</h2>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api2, type Dashboard, type ThemeItem } from "./api";
 import { TrendChart } from "./charts";
 import { PROVIDER_LABEL, ResultBadge } from "./format";
+import type { Tab } from "./App";
 
 const PHASES = ["opening", "middlegame", "endgame"] as const;
 const PHASE_LABEL = { opening: "Opening", middlegame: "Middlegame", endgame: "Endgame" };
@@ -15,12 +16,12 @@ export function WorkerBanner({ s }: { s: { worker_available: boolean; worker_err
     <p className={`notice ${s.worker_error ? "notice-error" : "notice-warning"}`}>
       {s.worker_error
         ? `The analysis worker could not start: ${s.worker_error}`
-        : "No analysis worker is running, so queued games wait. Start it with: python -m app.worker (in backend/)."}
+        : "The analysis engine isn't running right now, so queued games are waiting. If you run the app yourself, start it with: python -m app.worker (in backend/)."}
     </p>
   );
 }
 
-export function DashboardView({ refreshKey, onOpen }: { refreshKey: number; onOpen: (gameId: number, ply?: number) => void }) {
+export function DashboardView({ refreshKey, onOpen, onGo }: { refreshKey: number; onOpen: (gameId: number, ply?: number) => void; onGo: (t: Tab) => void }) {
   const [d, setD] = useState<Dashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = () => api2.dashboard().then(setD).catch((e) => setError(e.message));
@@ -43,7 +44,7 @@ export function DashboardView({ refreshKey, onOpen }: { refreshKey: number; onOp
       <div className="home">
         <section className="card panel">
           <div className="table-head">
-            <h2>How I've Been Playing</h2>
+            <h2>How You've Been Playing</h2>
             <span className="muted">
               {c.analyzed} of {c.games} games analyzed
               {c.queued + c.running > 0 ? ` · ${c.running} running, ${c.queued} queued` : ""}
@@ -52,7 +53,8 @@ export function DashboardView({ refreshKey, onOpen }: { refreshKey: number; onOp
           </div>
           {c.analyzed === 0 ? (
             <div className="empty">
-              <p>No analyzed games yet. Queue games from Game history or Suggest a set; results appear here as the worker finishes them.</p>
+              <p>No analyzed games yet. Your trends, recurring mistakes and strengths appear here once a few games are analyzed.</p>
+              <button className="primary" onClick={() => onGo(c.games === 0 ? "import" : "history")}>{c.games === 0 ? "Import games" : "Pick games to analyze"}</button>
             </div>
           ) : (
             <>

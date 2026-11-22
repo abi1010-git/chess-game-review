@@ -1,10 +1,11 @@
+import type { Tab } from "./App";
 import { useEffect, useState } from "react";
 import { api, api2, type Batch, type QueueSummary } from "./api";
 import { WorkerBanner } from "./DashboardView";
 
 const ORDER = ["done", "running", "queued", "failed", "cancelled"];
 
-export function QueueView({ refreshKey }: { refreshKey: number }) {
+export function QueueView({ refreshKey, onGo }: { refreshKey: number; onGo: (t: Tab) => void }) {
   const [batches, setBatches] = useState<Batch[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [queue, setQueue] = useState<QueueSummary | null>(null);
@@ -34,11 +35,16 @@ export function QueueView({ refreshKey }: { refreshKey: number }) {
       {queue && <WorkerBanner s={queue} />}
       {queue?.worker_available && (
         <p className="notice notice-info">
-          {queue.workers} analysis worker{queue.workers === 1 ? "" : "s"} running ({queue.engine}). Finished games appear on Home and in each game's report.
+          {queue.workers} analysis worker{queue.workers === 1 ? "" : "s"} running ({queue.engine}). Each game takes a few minutes. Finished games appear in <button className="link" onClick={() => onGo("home")}>Your progress</button> and in <button className="link" onClick={() => onGo("history")}>Pick games</button>, where you can open each report.
         </p>
       )}
       {error && <p className="error">{error}</p>}
-      {batches?.length === 0 && <section className="card empty"><p>Nothing queued yet. Select games in History or use Suggest a set.</p></section>}
+      {batches?.length === 0 && (
+        <section className="card empty">
+          <p>Nothing queued yet. Choose games to analyze first.</p>
+          <button className="primary" onClick={() => onGo("history")}>Pick games</button>
+        </section>
+      )}
       {batches?.map((b) => {
         const total = b.progress.total || 1;
         const open = (b.progress.counts.queued ?? 0) + (b.progress.counts.running ?? 0);
