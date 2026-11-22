@@ -1,5 +1,5 @@
 # One container: the website, the API and the Stockfish analysis worker.
-# Built for Hugging Face Spaces (port 7860), but runs anywhere Docker does.
+# Runs on Render's free plan (512 MB, so one engine) or anywhere Docker does.
 
 FROM node:22-slim AS web
 WORKDIR /web
@@ -11,7 +11,7 @@ RUN npm run build
 FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
     CHESS_REVIEW_DATA_DIR=/data STOCKFISH_PATH=/opt/stockfish/stockfish \
-    FRONTEND_DIST=/app/frontend/dist WORKER_THREADS=2 PORT=7860
+    FRONTEND_DIST=/app/frontend/dist WORKER_THREADS=1 PORT=7860
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates tar \
     && rm -rf /var/lib/apt/lists/*
 

@@ -1,10 +1,11 @@
 #!/bin/sh
 # Runs the analysis worker beside the API, restarting it if it stops.
 cd /app/backend
+# Create the database once, before the API and the worker both try to.
+python -c "from app import db; db.init_db()"
 (
-  sleep 4  # let the API create the database first
   while true; do
-    python -m app.worker --threads "${WORKER_THREADS:-2}"
+    python -m app.worker --threads "${WORKER_THREADS:-1}"
     echo "worker exited; restarting in 5s"
     sleep 5
   done
