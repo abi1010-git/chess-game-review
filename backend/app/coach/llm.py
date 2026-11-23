@@ -45,6 +45,7 @@ class Provider:
     last_error: str | None = None
     calls: int = 0
     failures: int = 0
+    discovered: bool = False  # asked the provider for its model list after a 404
 
     def has_room(self, now: float) -> bool:
         today = datetime.now(timezone.utc).date().isoformat()
@@ -184,6 +185,26 @@ class Router:
         return None
 
     def _call(self, p: Provider, system: str, user: str, schema: type[T]) -> tuple[str, str | None, T | None]:
+        outcome, note, value = self._call_once(p, system, user, schema)
+        if note == "HTTP 404" and not p.discovered:
+            # The model was probably retired. Ask the provider what it serves now and retry once.
+            p.discovered = True
+            newer = self._discover(p)
+            if newer and newer != p.model:
+                p.model = newer
+                outcome, note, value = self._call_once(p, system, user, schema)
+        return outcome, note, value
+
+    def _discover(self, p: Provider) -> str | None:
+        try:
+            with self.client_factory() as client:
+                r = client.get(f"{p.base_url}/models", headers={"Authorization": f"Bearer {p.key}"}, timeout=self.timeout)
+            ids = [m.get("id", "") for m in r.json().get("data", [])] if r.status_code < 400 else []
+        except (httpx.HTTPError, ValueError, AttributeError):
+            return None
+        return pick_model(p.model, ids)
+
+    def _call_once(self, p: Provider, system: str, user: str, schema: type[T]) -> tuple[str, str | None, T | None]:
         body = {"model": p.model, "temperature": 0.2, "max_tokens": 900,
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
         headers = {"Authorization": f"Bearer {p.key}", "Content-Type": "application/json"}
@@ -237,6 +258,27 @@ class Router:
         if wait:
             with self.lock:
                 p.cooldown_until = max(p.cooldown_until, now + wait)
+
+
+_SPECIAL = ("lite", "tts", "audio", "image", "live", "embed", "preview", "exp", "thinking", "native",
+            "computer", "robotics", "vision", "guard", "search", "nano", "8b", "learnlm")
+
+
+def _version(model_id: str) -> tuple[float, ...]:
+    m = re.search(r"(\d+(?:\.\d+)*)", model_id)
+    return tuple(float(x) for x in m.group(1).split(".")) if m else ()
+
+
+def pick_model(current: str, ids: list[str]) -> str | None:
+    """From a provider's model list, the newest model of the same family as `current`
+    (e.g. gemini-2.5-flash -> the newest plain gemini-*-flash), avoiding special variants."""
+    words = [w for w in re.split(r"[-_/.]", current.lower()) if w and not re.fullmatch(r"[\d.]+", w)]
+    names = [i.removeprefix("models/") for i in ids if i]
+    fam = [n for n in names if all(w in n.lower() for w in words)]
+    plain = [n for n in fam if not any(x in n.lower() and x not in current.lower() for x in _SPECIAL)]
+    pool = plain or [n for n in fam if not any(x in n.lower() and x not in current.lower()
+                                               for x in _SPECIAL if x not in ("preview", "exp"))]
+    return max(pool, key=lambda n: (_version(n), -len(n)), default=None)
 
 
 def _seconds(v: str | None) -> float | None:

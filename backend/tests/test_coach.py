@@ -270,3 +270,23 @@ def test_suggest_a_set_includes_evidence_advice(client):
     r = client.post("/api/selection/suggest", json={"target_from": "2025-06-01", "target_to": "2025-06-30",
                                                     "rating_band": 100, "max_comparison": 10}).json()
     assert r["advice"] and r["advice"][0]["level"] == "thin" and r["advice"][0]["comparisons"] == 3
+
+
+def test_retired_model_is_replaced_from_the_providers_model_list():
+    seen = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": "models/gemini-3.5-flash-lite"}, {"id": "models/gemini-3.8-flash"},
+                                                      {"id": "models/gemini-3.8-flash-preview-tts"}, {"id": "models/gemini-3.8-pro"}]})
+        model = json.loads(req.content)["model"]
+        seen.append(model)
+        if model == "gemini-2.5-flash":
+            return httpx.Response(404, json={"error": "not found"})
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps({"plies": [3]})}}]})
+
+    p = Provider("gemini", "Gemini", "https://g.test/v1", "gemini-2.5-flash", "k", 100, 1000, 1, 1)
+    router = Router([p], client_factory=lambda: httpx.Client(transport=httpx.MockTransport(handler)))
+    res = router.complete("pick", "s", "u", ModelPick)
+    assert res is not None and res.provider == "gemini" and res.value.plies == [3]
+    assert seen == ["gemini-2.5-flash", "gemini-3.8-flash"] and p.model == "gemini-3.8-flash"
