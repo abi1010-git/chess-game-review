@@ -25,6 +25,47 @@ Every move you play is checked by **Stockfish 18**. Explanations come from the e
 
 Forced moves, obvious recaptures and positions that were already won or lost are not judged, so you only see decisions that mattered.
 
+## The agentic AI coach
+
+The coach review is a **multi-agent system** built with [LangGraph](https://github.com/langchain-ai/langgraph). Five specialist agents share one typed state. They call tools, hand work to each other and decide the next step from what they find, including going back to search again when the evidence is weak.
+
+```mermaid
+flowchart TD
+    game(["Your game, analysed by Stockfish"]) --> R
+
+    R["<b>Game reviewer</b><br/>picks the decisions that mattered<br/><i>tools: engine lines, board features</i>"]
+    H["<b>History specialist</b><br/>compares them with your earlier games<br/><i>tool: history search</i>"]
+    N["<b>Reviewer</b><br/>narrows weak claims to this game only"]
+    W["<b>Writer</b><br/>explains each decision"]
+    V["<b>Verifier</b><br/>checks every move and number<br/>against the stored evidence"]
+    S["<b>Study coach</b><br/>picks a whole game to practise<br/><i>tool: game finder</i>"]
+    M[["<b>Model router</b><br/>Gemini · Groq · Cerebras · Mistral<br/>OpenRouter · GitHub Models<br/><i>rule-based fallback</i>"]]
+    out(["Coach review, step-by-step trace<br/>and a guided study"])
+
+    R -- "handoff" --> H
+    R -- "nothing to compare" --> W
+    H -- "weak match:<br/>search wider" --> H
+    H -- "still weak" --> N
+    H -- "strong match" --> W
+    N --> W
+    W --> V
+    V -- "unproven claims dropped" --> S
+    S --> out
+
+    R -. "choose decisions" .- M
+    W -. "write in plain language" .- M
+```
+
+What makes it agentic rather than a single prompt:
+
+- **Decisions, not a script.** The reviewer chooses which moments to examine. The history specialist chooses how to search (exact position, then pawn structure, then the kind of decision, then the game phase) and when a match is good enough.
+- **Tool use.** Agents call the engine's lines, board-feature detectors, a search over your past games and a game finder, instead of guessing.
+- **Handoffs with conditional routing.** Each agent passes typed results to the next, and the graph picks the next agent from the state: search again, narrow the claim or move on.
+- **Self-correction.** A weak comparison triggers a wider search. If the evidence is still thin, the claim is narrowed to "this game only" rather than overstated.
+- **Guardrails.** A verifier checks every move and number against stored evidence before anything is shown. Handoffs, searches and tool calls are capped, so a review always finishes.
+- **Multi-model routing.** Model calls go to whichever free provider has quota, with automatic failover. If none can answer, the coach falls back to rules and still works.
+- **Transparent.** Every step is recorded. Open **Show how the coach worked** on a review to see each handoff and tool call.
+
 ## How to use it
 
 1. **Open the [app](https://chess-game-review-gr1u.onrender.com).** If it hasn't been used for a while, the first load can take about a minute while the server wakes up.
@@ -98,7 +139,7 @@ The public site runs this image on [Render](https://render.com)'s free plan (512
 
 ### How the coach works
 
-The coach is a [LangGraph](https://github.com/langchain-ai/langgraph) workflow of specialists with typed inputs and outputs:
+The coach is a [LangGraph](https://github.com/langchain-ai/langgraph) workflow of specialists with typed inputs and outputs (see the [diagram above](#the-agentic-ai-coach); the graph is built in `backend/app/coach/review.py`):
 
 - **Game reviewer** picks the decisions worth comparing and calls tools for the engine's line and the board features.
 - **History specialist** searches your earlier games: exact position first, then the same pawn structure, then the same kind of decision. When a match is weak it searches again more broadly; when it is still weak it tells the reviewer to narrow the claim to this game only.
