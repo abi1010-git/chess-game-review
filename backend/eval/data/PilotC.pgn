@@ -1,0 +1,26 @@
+[Event "Pilot sample"]
+[Site "eval"]
+[Date "2025.01.06"]
+[Round "1"]
+[White "PilotC"]
+[Black "Opp33-00"]
+[Result "0-1"]
+[WhiteElo "1500"]
+[BlackElo "1510"]
+[TimeControl "600+0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ke2 Nxe4 5. Re1 d5 6. d3 Nxf2 7. Kxf2 dxc4 8. Nxe5 Nxe5 9. d4 Bd6 10. Bf4 Qf6 11. Qf3 O-O 12. Bxe5 Bxe5 13. dxe5 Qb6+ 14. Qe3 Qxb2 15. Na3 Qb6 16. Qxb6 axb6 17. Nb5 c6 18. Nd4 b5 19. a3 Bd7 20. c3 Rfe8 21. Kg1 Bg4 22. h3 Bc8 23. g4 Be6 24. Kf2 h6 25. Red1 Red8 26. Nxe6 fxe6 27. Rxd8+ Rxd8 28. a4 Rd2+ 29. Ke3 Rd3+ 30. Ke4 bxa4 31. Rxa4 Rxh3 32. Rxc4 h5 33. Ra4 Rh4 34. Kf3 Kh7 35. Ra8 Rxg4 36. Rb8 Kg6 37. Rxb7 c5 38. Rc7 c4 39. Re7 Kf5 40. Re8 Rf4+ 41. Ke3 Kxe5 42. Rg8 Rg4 43. Kf3 Rf4+ 44. Kg2 Rg4+ 45. Kh3 g6 0-1
+
+[Event "Pilot sample"]
+[Site "eval"]
+[Date "2025.03.03"]
+[Round "2"]
+[White "PilotC"]
+[Black "Opp33-10"]
+[Result "0-1"]
+[WhiteElo "1500"]
+[BlackElo "1450"]
+[TimeControl "600+0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ke2 Nxe4 5. Re1 d5 6. d3 Nxf2 7. Kxf2 dxc4 8. Nxe5 Nxe5 9. Rxe5+ Be6 10. Rxe6+ fxe6 11. Qh5+ g6 12. Qb5+ Qd7 13. Qxc4 Qd5 14. Nd2 O-O-O 15. Qxd5 exd5 16. Nb3 Bg7 17. a4 Rhf8+ 18. Kg3 Rf1 19. c3 Be5+ 20. Kh3 Rh1 21. Bf4 Rxa1 22. g3 Rb1 23. Bg5 Rf8 24. c4 dxc4 25. Nd2 Re1 26. Be7 Re8 27. Nf3 Re2 28. d4 Bxd4 29. b4 R8xe7 30. Nxd4 R2e4 31. Nb5 Kd7 32. Nc3 Rd4 33. a5 c6 34. Na2 Rd3 35. a6 b6 36. b5 Ree3 37. bxc6+ Kc7 38. Nb4 c3 39. Kg2 Rd2+ 40. Kh3 Ree2 41. Kg4 Re5 42. Kf3 g5 43. g4 b5 44. h3 Re7 45. h4 gxh4 0-1
+

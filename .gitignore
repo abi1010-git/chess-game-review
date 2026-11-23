@@ -11,3 +11,4 @@ frontend/*.tsbuildinfo
 # Local secrets (API keys)
 .env
 *.env
+backend/eval/results/eval.db*

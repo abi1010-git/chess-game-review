@@ -50,7 +50,10 @@ def dashboard(s: Session, profile_id: int, version: str | None = None) -> dict:
         .group_by(AnalysisJob.status)).all())
     runs = s.execute(select(AnalysisRun, Game).join(Game, Game.id == AnalysisRun.game_id).where(
         AnalysisRun.profile_id == profile_id, AnalysisRun.analysis_version == version)).all()
-    coverage = {"games": total_games, "analyzed": len(runs), "queued": job_counts.get("queued", 0),
+    outdated = s.scalar(select(func.count(func.distinct(AnalysisRun.game_id))).where(
+        AnalysisRun.profile_id == profile_id, AnalysisRun.analysis_version != version,
+        AnalysisRun.game_id.notin_(select(AnalysisRun.game_id).where(AnalysisRun.analysis_version == version)))) or 0
+    coverage = {"outdated": outdated, "games": total_games, "analyzed": len(runs), "queued": job_counts.get("queued", 0),
                 "running": job_counts.get("running", 0), "failed": job_counts.get("failed", 0)}
     if not runs:
         return {"analysis_version": version, "coverage": coverage, "recent": [], "trends": [],

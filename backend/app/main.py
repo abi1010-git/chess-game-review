@@ -1,24 +1,29 @@
 """FastAPI app: imports, game history, selection, the analysis queue, reports and the dashboard."""
 from __future__ import annotations
 
+import asyncio
+import logging
+import uuid
 from contextlib import asynccontextmanager
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Annotated, Callable
 
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from . import compare, config, db, jobs, selection
+from . import auth, compare, config, db, demo, jobs, limits, selection
 from .dashboard import dashboard as build_dashboard
 from .importers.base import ProviderError, RetryPolicy, make_client, validate_username
 from .importers.chesscom import ChessComAdapter
 from .importers.lichess import LichessAdapter
 from .importers.service import execute_import, remember_identity
 from .coach import service as coach_service
-from .models import AnalysisBatch, AnalysisJob, Game, ImportRun, Study, WorkerHeartbeat, utcnow
+from .models import AnalysisBatch, AnalysisJob, AnalysisRun, Game, ImportRun, Study, WorkerHeartbeat, utcnow
 from .pgn_parse import inspect_names
 from .schemas import (
     AccountImportRequest,
@@ -39,10 +44,45 @@ from .schemas import (
 async def lifespan(app: FastAPI):
     if db.engine is None:
         db.init_db()
+    task = asyncio.create_task(_purge_loop()) if config.AUTH_MODE == "guest" else None
     yield
+    if task:
+        task.cancel()
+
+
+log = logging.getLogger("chess_review.api")
+
+
+async def _purge_loop():
+    """Once at startup and then every 6 hours: delete guest spaces idle for the retention period."""
+    while True:
+        try:
+            def run():
+                with db.SessionLocal() as s:
+                    return auth.purge_idle_guests(s)
+            n = await asyncio.to_thread(run)
+            if n:
+                log.info("deleted %s idle guest space(s)", n)
+        except Exception:
+            log.exception("purging idle guest spaces failed")
+        await asyncio.sleep(6 * 3600)
 
 
 app = FastAPI(title="Chess Game Review API", version="0.1.0", lifespan=lifespan)
+app.middleware("http")(limits.rate_limit_middleware)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    if request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https":
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+    return response
+
+
 app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 
 # Overridable in tests (fake HTTP transport, no real sleeping).
@@ -50,7 +90,7 @@ app.state.http_client_factory = make_client
 app.state.retry_factory = RetryPolicy
 
 SessionDep = Annotated[Session, Depends(db.get_session)]
-ProfileDep = Annotated[int, Depends(db.get_profile_id)]
+ProfileDep = Annotated[int, Depends(auth.current_profile)]
 ADAPTERS = {"lichess": LichessAdapter, "chesscom": ChessComAdapter}
 
 
@@ -60,10 +100,94 @@ def _dt(d: date | None, end: bool = False) -> datetime | None:
     return datetime.combine(d, time.max if end else time.min)
 
 
+@app.exception_handler(Exception)
+async def unexpected_error(request: Request, exc: Exception):
+    """Never show a stack trace; give the visitor a reference they can quote."""
+    ref = uuid.uuid4().hex[:8]
+    log.exception("unhandled error %s on %s %s", ref, request.method, request.url.path)
+    return JSONResponse({"detail": f"Something went wrong on our side (reference {ref}). Please try again."},
+                        status_code=500)
+
+
 @app.get("/api/health")
 def health(s: SessionDep):
+    """Liveness plus a database check: 200 means the API can answer and reach the database."""
     s.execute(select(1))
     return {"status": "ok", "analysis_version": config.ANALYSIS_VERSION}
+
+
+@app.get("/api/health/ready")
+def ready(s: SessionDep):
+    """Readiness for monitoring: database, analysis worker, queue depth and whether the model is on.
+
+    Returns 503 when the worker is missing, so an uptime monitor notices that analysis has stopped.
+    """
+    s.execute(select(1))
+    w = worker_status(s)
+    queued = s.scalar(select(func.count(AnalysisJob.id)).where(AnalysisJob.status.in_(("queued", "running")))) or 0
+    body = {"status": "ok" if w["worker_available"] else "degraded", "database": "ok",
+            "worker": w["worker_available"], "queued_jobs": queued, "analysis_version": config.ANALYSIS_VERSION,
+            "auth_mode": config.AUTH_MODE, "model_enabled": coach_service.get_router().enabled,
+            "worker_error": w.get("worker_error")}
+    return JSONResponse(body, status_code=200 if w["worker_available"] else 503)
+
+
+# ---------------------------------------------------------------- your space: sample data, export, delete
+
+def _owned_profile(s: Session, profile_id: int):
+    from .models import Profile
+    return s.get(Profile, profile_id) if profile_id else None
+
+
+@app.get("/api/me")
+def me(s: SessionDep, profile_id: ProfileDep):
+    from .models import Profile
+    p = _owned_profile(s, profile_id)
+    n = s.scalar(select(func.count(Game.id)).where(Game.profile_id == profile_id)) or 0 if p else 0
+    return {"mode": config.AUTH_MODE, "has_space": p is not None, "games": n, "sample_available": demo.sample_available(),
+            "retention_days": config.GUEST_RETENTION_DAYS if config.AUTH_MODE == "guest" else None,
+            "limits": {"max_games": config.MAX_GAMES_PER_PROFILE, "max_file_mb": config.MAX_UPLOAD_BYTES // (1024 * 1024),
+                       "max_queued": config.MAX_QUEUED_JOBS_PER_PROFILE}}
+
+
+@app.post("/api/me/sample")
+def load_sample_history(s: SessionDep, profile_id: ProfileDep):
+    try:
+        n = demo.load_sample(s, profile_id)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    return {"games": n}
+
+
+@app.get("/api/me/export")
+def export_my_data(s: SessionDep, profile_id: ProfileDep):
+    """Everything this space holds that the visitor created: games, import history, study notes."""
+    from .models import CoachReview
+    games = list(s.scalars(select(Game).where(Game.profile_id == profile_id).order_by(Game.id)))
+    studies = list(s.scalars(select(Study).where(Study.profile_id == profile_id)))
+    payload = {
+        "exported_at": utcnow().isoformat(),
+        "games": [{"id": g.id, "provider": g.provider, "source_url": g.source_url, "played_at": g.played_at,
+                   "white": g.white, "black": g.black, "result": g.result, "player_color": g.player_color,
+                   "pgn": g.pgn} for g in games],
+        "studies": [{"game_id": st.game_id, "title": st.title, "notes": st.notes} for st in studies],
+        "coach_reviews": [{"game_id": r.game_id, "summary": (r.result or {}).get("summary")}
+                          for r in s.scalars(select(CoachReview).where(CoachReview.profile_id == profile_id))],
+    }
+    return JSONResponse(jsonable_encoder(payload),
+                        headers={"Content-Disposition": 'attachment; filename="chess-game-review-export.json"'})
+
+
+@app.delete("/api/me")
+def delete_my_data(response: Response, s: SessionDep, profile_id: ProfileDep):
+    """Permanently delete every game, analysis, note and review in this space (and the space itself)."""
+    if not profile_id:
+        return {"deleted": {"games": 0, "studies": 0}}
+    guest = config.AUTH_MODE == "guest"
+    counts = auth.erase_profile(s, profile_id, drop_profile=guest)
+    if guest:
+        response.delete_cookie(config.COOKIE_NAME, path="/")
+    return {"deleted": counts}
 
 
 # ---------------------------------------------------------------- imports
@@ -81,6 +205,7 @@ def import_account(provider: str, body: AccountImportRequest, background: Backgr
         raise HTTPException(422, "The start date must be before the end date.")
     if _active_imports(s, profile_id) >= 3:
         raise HTTPException(429, "Three imports are already running. Wait for one to finish.")
+    _check_space(s, profile_id)
 
     name = "Lichess" if provider == "lichess" else "Chess.com"
     run = ImportRun(profile_id=profile_id, source=provider, label=f"{name}: {username}",
@@ -104,6 +229,13 @@ def import_account(provider: str, body: AccountImportRequest, background: Backgr
 
     background.add_task(run_import)
     return run
+
+
+def _check_space(s: Session, profile_id: int) -> None:
+    n = s.scalar(select(func.count(Game.id)).where(Game.profile_id == profile_id)) or 0
+    if n >= config.MAX_GAMES_PER_PROFILE:
+        raise HTTPException(409, f"Your space holds {config.MAX_GAMES_PER_PROFILE} games, the most allowed. "
+                                 "Delete your data from the menu to start again.")
 
 
 def _active_imports(s: Session, profile_id: int) -> int:
@@ -139,6 +271,7 @@ async def import_pgn(background: BackgroundTasks, s: SessionDep, profile_id: Pro
     text = await _read_pgn(file)
     if _active_imports(s, profile_id) >= 3:
         raise HTTPException(429, "Three imports are already running. Wait for one to finish.")
+    _check_space(s, profile_id)
     run = ImportRun(profile_id=profile_id, source="pgn", label=f"PGN upload: {file.filename or 'file'}",
                     params={"filename": file.filename, "player_names": names})
     s.add(run)
@@ -188,10 +321,17 @@ def _with_status(s: Session, games: list[Game]) -> list[dict]:
     ids = [g.id for g in games]
     statuses = dict(s.execute(select(AnalysisJob.game_id, AnalysisJob.status).where(
         AnalysisJob.game_id.in_(ids), AnalysisJob.analysis_version == config.ANALYSIS_VERSION)).all()) if ids else {}
+    # A game analyzed only under an older analysis version needs analyzing again to count.
+    current = set(s.scalars(select(AnalysisRun.game_id).where(
+        AnalysisRun.game_id.in_(ids), AnalysisRun.analysis_version == config.ANALYSIS_VERSION))) if ids else set()
+    older = dict(s.execute(select(AnalysisRun.game_id, func.max(AnalysisRun.analysis_version)).where(
+        AnalysisRun.game_id.in_(ids), AnalysisRun.analysis_version != config.ANALYSIS_VERSION)
+        .group_by(AnalysisRun.game_id)).all()) if ids else {}
     out = []
     for g in games:
         d = GameOut.model_validate(g).model_dump()
         d["analysis_status"] = statuses.get(g.id, "none")
+        d["outdated_version"] = older.get(g.id) if g.id not in current else None
         out.append(d)
     return out
 
@@ -232,7 +372,8 @@ def get_game(game_id: int, s: SessionDep, profile_id: ProfileDep):
     if g is None or g.profile_id != profile_id:
         raise HTTPException(404, "Game not found.")
     d = GameDetail.model_validate(g).model_dump()
-    d["analysis_status"] = _with_status(s, [g])[0]["analysis_status"]
+    ws = _with_status(s, [g])[0]
+    d["analysis_status"], d["outdated_version"] = ws["analysis_status"], ws["outdated_version"]
     return d
 
 
@@ -262,10 +403,22 @@ def _batch_out(s: Session, batch: AnalysisBatch, summary: dict | None = None) ->
             "progress": jobs.batch_progress(s, batch), "summary": summary}
 
 
+def _check_queue_room(s: Session, profile_id: int, adding: int) -> None:
+    active = AnalysisJob.status.in_(("queued", "running"))
+    mine = s.scalar(select(func.count(AnalysisJob.id)).where(AnalysisJob.profile_id == profile_id, active)) or 0
+    if mine + adding > config.MAX_QUEUED_JOBS_PER_PROFILE:
+        raise HTTPException(429, f"You can have at most {config.MAX_QUEUED_JOBS_PER_PROFILE} games waiting for analysis "
+                                 f"({mine} already waiting). Pick fewer games or wait for some to finish.")
+    total = s.scalar(select(func.count(AnalysisJob.id)).where(active)) or 0
+    if total + adding > config.MAX_QUEUED_JOBS_TOTAL:
+        raise HTTPException(503, "The analysis queue is full right now. Please try again in a little while.")
+
+
 @app.post("/api/analysis/batches", response_model=BatchOut, status_code=201)
 def create_batch(body: BatchCreate, s: SessionDep, profile_id: ProfileDep):
     if not jobs.preview(s, profile_id, body.game_ids)["found"]:
         raise HTTPException(404, "None of these games were found.")
+    _check_queue_room(s, profile_id, jobs.preview(s, profile_id, body.game_ids)["will_queue"])
     for attempt in range(2):
         try:
             batch, summary = jobs.enqueue(s, profile_id, body.game_ids, body.mode, body.rationale, body.roles)
@@ -331,7 +484,8 @@ def get_report(game_id: int, s: SessionDep, profile_id: ProfileDep):
     if g is None or g.profile_id != profile_id:
         raise HTTPException(404, "Game not found.")
     game = GameDetail.model_validate(g).model_dump()
-    game["analysis_status"] = _with_status(s, [g])[0]["analysis_status"]
+    ws = _with_status(s, [g])[0]
+    game["analysis_status"], game["outdated_version"] = ws["analysis_status"], ws["outdated_version"]
     report = compare.game_report(s, g)
     return {"game": game, "report": report, **worker_status(s)}
 
@@ -340,8 +494,7 @@ def get_report(game_id: int, s: SessionDep, profile_id: ProfileDep):
 
 def visitor_id(request: Request) -> str:
     """Who is asking, for the per-visitor model limit (first proxy hop on hosted deploys)."""
-    fwd = request.headers.get("x-forwarded-for")
-    return (fwd.split(",")[0].strip() if fwd else None) or (request.client.host if request.client else "local")
+    return limits.client_ip(request)
 
 
 VisitorDep = Annotated[str, Depends(visitor_id)]
@@ -363,7 +516,11 @@ def _own_study(s: Session, study_id: int, profile_id: int) -> Study:
 
 @app.get("/api/coach/status")
 def coach_status(visitor: VisitorDep):
-    return coach_service.coach_status(visitor)
+    st = coach_service.coach_status(visitor)
+    if config.AUTH_MODE == "guest":  # the public site never reveals which provider or model is behind it
+        st = {"enabled": st["enabled"], "providers": [{"available": p["available"]} for p in st["providers"]],
+              "visitor_runs_left_this_hour": st["visitor_runs_left_this_hour"]}
+    return st
 
 
 @app.get("/api/games/{game_id}/coach-review")

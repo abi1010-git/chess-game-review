@@ -62,6 +62,7 @@ class GameOut(BaseModel):
     opening: str | None
     termination: str | None
     analysis_status: str = "none"
+    outdated_version: str | None = None  # analyzed only under this older analysis version
 
 
 class GameDetail(GameOut):

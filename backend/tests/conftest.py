@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import httpx
@@ -38,9 +39,38 @@ class FakeWeb:
         return RetryPolicy(sleep=self.sleeps.append)
 
 
+_PG = {}
+
+
+def _postgres_url() -> str:
+    """CHESS_TEST_PG=1 runs the whole suite on an embedded PostgreSQL (needs pixeltable-pgserver)."""
+    if "url" not in _PG:
+        import tempfile
+
+        import pixeltable_pgserver as pgserver
+        _PG["srv"] = pgserver.get_server(tempfile.mkdtemp(), cleanup_mode="stop")
+        _PG["url"] = _PG["srv"].get_uri().replace("postgresql://", "postgresql+psycopg://", 1)
+    return _PG["url"]
+
+
+@pytest.fixture(autouse=True)
+def fresh_rate_limits():
+    from app import limits
+    limits.windows.hits.clear()
+    yield
+
+
 @pytest.fixture()
 def database(tmp_path):
-    db.init_db(f"sqlite:///{(tmp_path / 'test.db').as_posix()}")
+    if os.environ.get("CHESS_TEST_PG") == "1":
+        from sqlalchemy import create_engine, text
+        url = _postgres_url()
+        with create_engine(url, isolation_level="AUTOCOMMIT").connect() as c:
+            c.execute(text("DROP SCHEMA public CASCADE"))
+            c.execute(text("CREATE SCHEMA public"))
+        db.init_db(url)
+    else:
+        db.init_db(f"sqlite:///{(tmp_path / 'test.db').as_posix()}")
     yield db
     db.engine.dispose()
 

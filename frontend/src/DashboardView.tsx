@@ -54,6 +54,12 @@ export function DashboardView({ refreshKey, onOpen, onGo, onStudy, onResume }: {
               {c.failed ? ` · ${c.failed} failed` : ""}
             </span>
           </div>
+          {c.outdated > 0 && (
+            <p className="notice notice-info">
+              {c.outdated} game{c.outdated === 1 ? " was" : "s were"} analyzed with an older version of the analysis
+              (now {d.analysis_version}) and {c.outdated === 1 ? "isn't" : "aren't"} counted here. Analyze {c.outdated === 1 ? "it" : "them"} again from <b>Pick games</b>.
+            </p>
+          )}
           {c.analyzed === 0 ? (
             <div className="empty">
               <p>No analyzed games yet. Your trends, recurring mistakes and strengths appear here once a few games are analyzed.</p>

@@ -114,7 +114,12 @@ export function ReportView({ gameId, initialPly, onOpen, onBack, onStudy }: {
             <p><span className="spinner" style={{ display: "inline-block" }} /> {status === "running" ? "Analyzing this game…" : "Queued for analysis."} The report appears here when it's done.</p>
           ) : (
             <>
-              <p>This game hasn't been analyzed yet{status === "failed" ? " (the last attempt failed)" : ""}.</p>
+              <p>
+                {data?.game.outdated_version
+                  ? `This game was analyzed with an older version of the analysis (${data.game.outdated_version}); the current version is newer, so it needs analyzing again`
+                  : "This game hasn't been analyzed yet"}
+                {status === "failed" ? " (the last attempt failed)" : ""}.
+              </p>
               <button className="primary" disabled={queueing} onClick={queue}>Analyze this game</button>
             </>
           )}

@@ -6,6 +6,7 @@ import { ImportView } from "./ImportView";
 import { QueueView } from "./QueueView";
 import { ReportView } from "./ReportView";
 import { StudyView } from "./StudyView";
+import { SpaceBar } from "./SpaceBar";
 import { SuggestView } from "./SuggestView";
 import { coach } from "./api";
 
@@ -81,6 +82,7 @@ export function App() {
           ))}
         </nav>
       </header>
+      <SpaceBar version={gamesVersion} onChanged={() => { setReport(null); setStudy(null); setTab(tabFromHash() ?? "home"); bumpGames(); bumpQueue(); }} />
       <main>
         {/* Keep the import view mounted so its progress polling continues on other tabs. */}
         {studyError && <p className="notice notice-error">{studyError}</p>}

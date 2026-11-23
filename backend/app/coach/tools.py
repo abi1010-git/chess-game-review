@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from .. import config
 from ..analysis import INACCURACY, MISTAKE
-from ..compare import THEME_LABELS, Decision, _game_hash, load_decisions, situation_for
+from ..compare import THEME_LABELS, Decision, _game_hash, earlier_pool, load_decisions, situation_for
 from ..models import AnalysisRun, Finding, Game, MoveEval
 from .schemas import CandidateDecision, HistoryMatch, HistoryResult, SearchFeature
 
@@ -47,7 +47,7 @@ def load_context(s: Session, game: Game, version: str | None = None) -> GameCont
     findings = list(s.scalars(select(Finding).where(Finding.run_id == run.id).order_by(Finding.ply)))
     decisions = load_decisions(s, game.profile_id, version)
     target_hash = _game_hash(game)
-    pool = [d for d in decisions if d.game_id != game.id and d.game_hash != target_hash and not d.low_info]
+    pool = earlier_pool(decisions, game, target_hash)
     by_ply: dict[int, list[Finding]] = defaultdict(list)
     for f in findings:
         by_ply[f.ply].append(f)
@@ -156,8 +156,7 @@ def search_history(ctx: GameContext, ply: int, feature: SearchFeature, theme: st
     if feature in ("theme", "phase"):
         gaps.append("The positions are similar in kind, not identical.")
 
-    exact_hits = len(kept) if feature == "exact" else 0
-    strong = games >= MIN_GAMES or exact_hits >= 2
+    strong = games >= MIN_GAMES  # distinct earlier games: two decisions from one game are not a pattern
     nxt = next_feature(feature, theme)
     if strong:
         step, widen = "accept", None

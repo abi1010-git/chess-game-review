@@ -43,6 +43,7 @@ export type Game = {
   opening: string | null;
   eco: string | null;
   analysis_status: string;
+  outdated_version?: string | null;
 };
 
 export type Facets = {
@@ -332,7 +333,7 @@ export type ThemeItem = {
 
 export type Dashboard = WorkerStatus & {
   analysis_version: string;
-  coverage: { games: number; analyzed: number; queued: number; running: number; failed: number };
+  coverage: { outdated: number; games: number; analyzed: number; queued: number; running: number; failed: number };
   recent: {
     game_id: number; played_at: string | null; date_raw: string | null; opponent: string | null; opponent_rating: number | null;
     player_rating: number | null; color: string; result: Game["player_result"]; time_class: string; provider: string;
@@ -454,4 +455,14 @@ export const coach = {
   saveNotes: (id: number, index: number, notes: StudyNotes) => request<Study>(`/studies/${id}/checkpoints/${index}`, put(notes)),
   reveal: (id: number, index: number) => request<Study>(`/studies/${id}/checkpoints/${index}/reveal`, { method: "POST" }),
   deleteStudy: (id: number) => fetch(`/api/studies/${id}`, { method: "DELETE" }),
+};
+
+export type Me = {
+  mode: "single" | "guest"; has_space: boolean; games: number; sample_available: boolean; retention_days: number | null;
+  limits: { max_games: number; max_file_mb: number; max_queued: number };
+};
+export const me = {
+  get: () => request<Me>("/me"),
+  loadSample: () => request<{ games: number }>("/me/sample", { method: "POST" }),
+  remove: () => request<{ deleted: { games: number; studies: number } }>("/me", { method: "DELETE" }),
 };

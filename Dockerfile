@@ -11,7 +11,7 @@ RUN npm run build
 FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
     CHESS_REVIEW_DATA_DIR=/data STOCKFISH_PATH=/opt/stockfish/stockfish \
-    FRONTEND_DIST=/app/frontend/dist WORKER_THREADS=1 PORT=7860
+    FRONTEND_DIST=/app/frontend/dist WORKER_THREADS=1 PORT=7860 AUTH_MODE=guest
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates tar \
     && rm -rf /var/lib/apt/lists/*
 
@@ -29,6 +29,8 @@ WORKDIR /app
 COPY backend/requirements.txt backend/requirements.txt
 RUN pip install -r backend/requirements.txt
 COPY backend/app backend/app
+COPY backend/alembic.ini backend/alembic.ini
+COPY backend/migrations backend/migrations
 COPY --from=web /web/dist frontend/dist
 COPY start.sh /app/start.sh
 

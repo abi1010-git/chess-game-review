@@ -83,8 +83,11 @@ What makes it agentic rather than a single prompt:
 
 ## Good to know
 
-- **Your games are not kept on the public site.** It runs on a free server that resets when it restarts or sleeps, which clears imported games and analyses. To keep your history, run the app on your own computer (see below).
-- **There are no accounts yet.** Everyone using the public link shares the same space, so others may see games imported there.
+- **Try it without importing anything.** On a new visit, press **Try a sample history** (24 engine-played games, already analyzed) to see every screen straight away.
+- **Your games are private to your browser.** The site gives each browser its own space, found through a random cookie. There are no accounts, passwords or email addresses. Nobody else can see your games, notes or reports.
+- **You control your data.** **Download my data** and **Delete my data** are at the top of the site. Spaces nobody opens for 30 days are deleted automatically.
+- **Limits on the public site:** PGN files up to 5 MB, 1,000 games and 60 games waiting for analysis per space, and a request limit per address.
+- **The free server can reset.** Until the site moves to a hosted database, a restart can clear imported games (see [docs/deploy.md](docs/deploy.md)).
 - **Only public games** can be imported from Lichess and Chess.com. Variants such as Chess960 are skipped.
 
 ---
@@ -155,7 +158,8 @@ AI calls go through a router that tries free providers in order of quality (Gemi
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | SQLite in `backend/data/` | Set to `postgresql+psycopg://…` for PostgreSQL (install `psycopg[binary]`) |
+| `DATABASE_URL` | SQLite in `backend/data/` | Set to `postgresql://…` (or `postgresql+psycopg://…`) for PostgreSQL. Migrations run automatically at startup |
+| `MIGRATE_SQLITE` | off | Set to `1` to use the migrations on SQLite too (normally SQLite creates its tables directly) |
 | `CHESS_REVIEW_DATA_DIR` | `backend/data` | Where the SQLite database is kept |
 | `STOCKFISH_PATH` | PATH, then `backend/engines/` | Stockfish binary for the worker |
 | `WORKER_THREADS` | 2 (1 in Docker) | Parallel single-threaded engines in one worker |
@@ -172,6 +176,11 @@ AI calls go through a router that tries free providers in order of quality (Gemi
 | `LLM_<NAME>_RPM`, `LLM_<NAME>_RPD` | below each free tier | The app's own per-minute and per-day budget for one provider |
 | `COACH_MODEL_RUNS_PER_HOUR` | 20 | AI-written reviews per visitor per hour before falling back to rules |
 | `LLM_DISABLED` | off | Set to `1` to never call a model |
+| `AUTH_MODE` | `single` | `guest` gives every browser its own private space (the Docker image sets it) |
+| `GUEST_RETENTION_DAYS` | 30 | Idle guest spaces are deleted after this many days |
+| `MAX_GAMES_PER_PROFILE`, `MAX_QUEUED_JOBS_PER_PROFILE`, `MAX_QUEUED_JOBS_TOTAL` | 1000, 60, 400 | Caps on stored games and queued analysis |
+| `RATE_LIMIT_PER_MINUTE`, `RATE_LIMIT_IMPORTS_PER_HOUR`, `RATE_LIMIT_ENABLED` | 240, 20, on | Per-address request limits |
+| `TRUSTED_PROXY_HOPS` | 1 | Proxies in front of the app, for finding the real client address |
 
 ### Project layout
 
@@ -188,12 +197,42 @@ backend/app/
   dashboard.py    "Your progress"
   coach/          phase 3: LangGraph specialists (reviewer, history, study coach), tools, verifier, LLM router
   worker.py       the analysis worker
+  auth.py         guest spaces, per-space isolation, idle cleanup, delete-my-data
+  limits.py       rate limits and the real client address
+  demo.py         the bundled sample history (demo_data.json.gz)
+  db.py           database setup; runs the Alembic migrations on PostgreSQL
+backend/migrations/  Alembic migrations (`alembic upgrade head`)
+backend/eval/     phase 4 evaluation: pilot games, the evaluation harness, real example outputs
+docs/evaluation.md  the evaluation summary
   main.py         API routes, and serves the built website
 backend/tests/    unit and API tests
 frontend/src/     React screens: Import, Pick games, Analysis, Your progress, Suggest a set, Game report, Coach review, Study
 ```
 
+### Database and migrations
+
+SQLite is the default for local use and needs no setup. For PostgreSQL set `DATABASE_URL`; the schema is created and upgraded by the migrations in `backend/migrations/` (the API and worker run `alembic upgrade head` at startup, guarded by a database lock so they can start at the same time). After changing `models.py`, create a migration with `cd backend && alembic revision --autogenerate -m "what changed"`; a test fails if the models and the migrations disagree.
+
+Run the whole test suite on a real PostgreSQL with `pip install pixeltable-pgserver` and `CHESS_TEST_PG=1 python -m pytest -q` (or point `TEST_DATABASE_URL` at a throwaway database for the PostgreSQL-specific tests).
+
+### Analysis versions
+
+Every analysis is stored with the analysis version it was made under. A game analyzed only under an older version is shown as needing analysis again (a notice on the dashboard and on the game's report) and is left out of the trends until it is.
+
+### Public launch
+
+`AUTH_MODE=guest` gives each browser a private space (`auth.py`), with per-space quotas, per-address rate limits (`limits.py`), a bundled sample history (`demo.py`), data export and deletion (`/api/me`), idle-space cleanup, and health checks (`/api/health`, `/api/health/ready`). [`docs/deploy.md`](docs/deploy.md) lists the host decisions, settings, backups and the public-URL checklist. After every deploy run the smoke test, which acts as a new visitor:
+
+```bash
+python scripts/smoke_test.py https://your-site.example.com            # add --llm-disabled when the model is off
+```
+
+### Evaluation
+
+[`docs/evaluation.md`](docs/evaluation.md) compares the app with a recent-accuracy summary and a single-game review on a sample with a known, planted weakness, compares three ways of coordinating the coach, lists the bugs the evaluation found and the failure cases that remain. Re-run it with `python -m eval.run_eval` (see the document).
+
 ### Planned
 
-- An evaluation of the coach: AI-written against rule-based reviews, on the same games.
-- Accounts, so each player has their own private history.
+- Measure the model-backed mode against the rule-based mode (the harness is ready; it needs a provider key).
+- A pilot with real players on the same sample and thresholds.
+- Sign-in with an account, so a history can follow a player across devices (spaces are tied to one browser for now).

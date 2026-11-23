@@ -8,6 +8,14 @@ DATA_DIR = Path(os.environ.get("CHESS_REVIEW_DATA_DIR", BASE_DIR / "data"))
 # SQLite for local development; set DATABASE_URL=postgresql+psycopg://... for PostgreSQL.
 DATABASE_URL = os.environ.get("DATABASE_URL") or f"sqlite:///{(DATA_DIR / 'app.db').as_posix()}"
 
+# Heroku-style postgres:// URLs, and bare postgresql://, should use the psycopg 3 driver.
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len("postgres://"):]
+elif DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len("postgresql://"):]
+# SQLite normally skips migrations (tables are created directly); set 1 to use them there too.
+MIGRATE_SQLITE = os.environ.get("MIGRATE_SQLITE", "") == "1"
+
 # Bump when the engine settings or finding logic change, so games show as needing re-analysis.
 ANALYSIS_VERSION = os.environ.get("ANALYSIS_VERSION", "v1")
 
@@ -48,3 +56,17 @@ WORKER_LEASE_SECONDS = int(os.environ.get("WORKER_LEASE_SECONDS", 300))
 
 # Built frontend (frontend/dist) served by the API in single-container deployments.
 FRONTEND_DIST = Path(os.environ.get("FRONTEND_DIST", BASE_DIR.parent / "frontend" / "dist"))
+
+# ---------------------------------------------------------------- phase 5: public launch
+# single: one local profile, no login (local use). guest: every browser gets its own private space,
+# found through a random cookie, so uploads, notes, reports and jobs are isolated per visitor.
+AUTH_MODE = os.environ.get("AUTH_MODE", "single")
+GUEST_RETENTION_DAYS = int(os.environ.get("GUEST_RETENTION_DAYS", 30))   # idle spaces are deleted after this
+MAX_GAMES_PER_PROFILE = int(os.environ.get("MAX_GAMES_PER_PROFILE", 1000))
+MAX_QUEUED_JOBS_PER_PROFILE = int(os.environ.get("MAX_QUEUED_JOBS_PER_PROFILE", 60))
+MAX_QUEUED_JOBS_TOTAL = int(os.environ.get("MAX_QUEUED_JOBS_TOTAL", 400))
+MAX_GUEST_PROFILES_PER_IP_PER_HOUR = int(os.environ.get("MAX_GUEST_PROFILES_PER_IP_PER_HOUR", 10))
+RATE_LIMIT_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", 240))   # all /api requests, per IP
+RATE_LIMIT_IMPORTS_PER_HOUR = int(os.environ.get("RATE_LIMIT_IMPORTS_PER_HOUR", 20))  # imports + uploads, per IP
+RATE_LIMIT_ENABLED = os.environ.get("RATE_LIMIT_ENABLED", "1") != "0"
+COOKIE_NAME = "cgr_session"

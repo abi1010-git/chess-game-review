@@ -124,6 +124,13 @@ def _context_rank(target_game: Game, d: Decision) -> tuple:
     return (0 if same_pool else 1, rating_gap, when)
 
 
+def earlier_pool(decisions: list[Decision], game: Game, target_hash: str) -> list[Decision]:
+    """The player's decisions from games played before this one (never later or undated games)."""
+    when = (game.played_at, game.id) if game.played_at else None
+    return [d for d in decisions if d.game_id != game.id and d.game_hash != target_hash and not d.low_info
+            and (when is None or (d.played_at is not None and (d.played_at, d.game_id) < when))]
+
+
 def compare_decision(target: Decision, target_game: Game, pool: list[Decision], theme: str | None) -> dict:
     exact = [d for d in pool if d.position_key == target.position_key]
     seen = {(d.game_id, d.ply) for d in exact}
@@ -221,7 +228,7 @@ def game_report(s: Session, game: Game, version: str | None = None) -> dict | No
     findings = list(s.scalars(select(Finding).where(Finding.run_id == run.id).order_by(Finding.ply)))
     all_dec = load_decisions(s, game.profile_id, version)
     target_hash = _game_hash(game)
-    pool = [d for d in all_dec if d.game_id != game.id and d.game_hash != target_hash and not d.low_info]
+    pool = earlier_pool(all_dec, game, target_hash)
     mine = {d.ply: d for d in all_dec if d.game_id == game.id}
     by_ply = defaultdict(list)
     for f in findings:

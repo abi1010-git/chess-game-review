@@ -330,3 +330,9 @@ details summary { cursor: pointer; color: var(--accent); }
 .field-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .row-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 .answer { border-top: 1px solid var(--line); padding-top: 8px; }
+
+.space-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between;
+  padding: 8px 20px; background: var(--info-soft); font-size: 0.9rem; }
+.space-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.linkbtn { text-decoration: underline; }
+button.danger { background: var(--err); color: #fff; border-color: var(--err); }

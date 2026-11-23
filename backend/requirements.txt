@@ -6,5 +6,6 @@ httpx==0.28.1
 python-multipart==0.0.34
 pydantic==2.14.4
 langgraph==1.2.24
-# Postgres driver, only needed when DATABASE_URL points at PostgreSQL:
-# psycopg[binary]
+# Postgres driver (needed when DATABASE_URL points at PostgreSQL) and migrations:
+psycopg[binary]==3.3.9
+alembic==1.20.1

@@ -27,6 +27,10 @@ class Profile(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    kind: Mapped[str] = mapped_column(String(10), default="local", server_default="local")  # local | guest
+    token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)  # sha256 of the cookie
+    last_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    __table_args__ = (UniqueConstraint("token_hash", name="uq_profiles_token_hash"),)
 
 
 class SourceIdentity(Base):

@@ -4,10 +4,11 @@ from __future__ import annotations
 import logging
 from typing import Callable, Iterable
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from .. import config
 from ..models import Game, ImportRun, SourceIdentity, utcnow
 from ..pgn_parse import (
     ParsedGame,
@@ -40,6 +41,10 @@ class ImportProcessor:
         self.skips: list[dict] = list(run.skips or [])
         self.notices: list[dict] = list(run.notices or [])
         self._kept_separate = 0
+        self.capacity = None
+        if config.AUTH_MODE == "guest":  # a public space holds a bounded number of games
+            have = session.scalar(select(func.count(Game.id)).where(Game.profile_id == run.profile_id)) or 0
+            self.capacity = max(0, config.MAX_GAMES_PER_PROFILE - have)
 
     # ---- bookkeeping
     @property
@@ -116,6 +121,10 @@ class ImportProcessor:
             self._save_progress()
             return
         color = "white" if is_white else "black"
+        if self.capacity is not None and self.counts["imported"] >= self.capacity:
+            self._skip(parsed.index, parsed.label, f"Your space is full ({config.MAX_GAMES_PER_PROFILE} games)")
+            self._save_progress()
+            return
 
         detected = detect_platform(h.get("Site"), h.get("Link"))
         if raw is not None and raw.provider_game_id:
@@ -199,6 +208,11 @@ class ImportProcessor:
         if self._kept_separate:
             self.notify("info", f"{self._kept_separate} game(s) had no players, date or game link, so they were "
                                 "kept as separate games instead of being matched as duplicates.")
+        if not failed and self.counts["seen"] == 0:
+            what = "the file" if self.source_kind == "upload" else "this account for these dates"
+            self.notify("warning", f"No games were found in {what}. "
+                                   + ("Check that it is a PGN file with standard chess games." if self.source_kind == "upload"
+                                      else "Check the username and the date range."))
         run = self.run
         if failed:
             run.status = "failed" if self.counts["imported"] == 0 else "partial"

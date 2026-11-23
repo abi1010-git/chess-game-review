@@ -1,0 +1,212 @@
+{
+ "thresholds": {
+  "evidence_accuracy": 1.0,
+  "overclaims": 0,
+  "later_games_cited": 0,
+  "planted_decision_selected": 0.8,
+  "planted_pattern_found": 0.8,
+  "control_false_alarms": 0,
+  "sparse_declined": 1.0,
+  "study_pick_on_target": 0.9,
+  "evidence_speedup": 3.0,
+  "coordination_runtime_ratio": 3.0
+ },
+ "players": {
+  "PilotA": {
+   "games": 24,
+   "planted_early": 2,
+   "planted_recent": 8,
+   "baseline_accuracy": {
+    "early": 94.1,
+    "recent": 92.6,
+    "delta": -1.6,
+    "names_a_pattern": false,
+    "cites_positions": 0
+   },
+   "usual_review": {
+    "planted_move_in_top3": "8/8",
+    "says_it_repeats": false,
+    "games_to_open_for_3_examples": [
+     4,
+     4,
+     4,
+     4,
+     4,
+     5,
+     5,
+     5
+    ]
+   },
+   "app_dashboard": {
+    "king_safety_status": "recurring",
+    "games": 10,
+    "occurrences": 12
+   }
+  },
+  "PilotB": {
+   "games": 24,
+   "planted_early": 2,
+   "planted_recent": 2,
+   "baseline_accuracy": {
+    "early": 93.8,
+    "recent": 94.2,
+    "delta": 0.5,
+    "names_a_pattern": false,
+    "cites_positions": 0
+   },
+   "usual_review": {
+    "planted_move_in_top3": "2/2",
+    "says_it_repeats": false,
+    "games_to_open_for_3_examples": [
+     22,
+     22
+    ]
+   },
+   "app_dashboard": {
+    "king_safety_status": "emerging",
+    "games": 4,
+    "occurrences": 4
+   }
+  }
+ },
+ "coordination": {
+  "graph": {
+   "claims": 62,
+   "evidence_accuracy": 1.0,
+   "overclaims": 0,
+   "cites_later_games_as_earlier": 0,
+   "useful_selection": 0.79,
+   "planted_decision_selected": "8/8",
+   "planted_pattern_found": "8/8",
+   "sparse_declined": "3/3",
+   "steady_player_verdicts": {
+    "worse": 7,
+    "similar": 19
+   },
+   "mean_secs_per_review": 0.038
+  },
+  "fixed": {
+   "claims": 62,
+   "evidence_accuracy": 1.0,
+   "overclaims": 0,
+   "cites_later_games_as_earlier": 0,
+   "useful_selection": 0.79,
+   "planted_decision_selected": "8/8",
+   "planted_pattern_found": "8/8",
+   "sparse_declined": "3/3",
+   "steady_player_verdicts": {
+    "insufficient": 21,
+    "worse": 2,
+    "similar": 3
+   },
+   "mean_secs_per_review": 0.0005
+  },
+  "single": {
+   "claims": 62,
+   "evidence_accuracy": 1.0,
+   "overclaims": 4,
+   "cites_later_games_as_earlier": 0,
+   "useful_selection": 0.79,
+   "planted_decision_selected": "8/8",
+   "planted_pattern_found": "8/8",
+   "sparse_declined": "2/3",
+   "steady_player_verdicts": {
+    "worse": 7,
+    "similar": 19
+   },
+   "mean_secs_per_review": 0.0014
+  }
+ },
+ "model": null,
+ "samples": {
+  "PilotA": [
+   {
+    "headline": "4. Ke2: your usual pattern in king safety in the opening",
+    "verdict": "similar",
+    "text": "In line with your usual play. Across 23 decisions in 23 earlier games with the exact same position you went wrong 39% of the time. Here the move cost 18 win-% points (d3 was stronger). Ke2 moved the king before castling while queens are on the board. d3 kept the king safer.",
+    "refs": [
+     [
+      24,
+      6
+     ],
+     [
+      23,
+      6
+     ],
+     [
+      22,
+      6
+     ],
+     [
+      21,
+      6
+     ]
+    ]
+   },
+   {
+    "headline": "19. Bg5: worse than usual in tactical moments",
+    "verdict": "worse",
+    "text": "Worse than usual. This move cost 15 win-% points (Rae1 was stronger), but across 35 decisions in 18 earlier games with the same kind of decision in the same phase you never went wrong. After Bg5, the line Qxe5 loses about 5 points of material. Rae1 avoided it.",
+    "refs": [
+     [
+      24,
+      36
+     ],
+     [
+      23,
+      26
+     ],
+     [
+      23,
+      38
+     ],
+     [
+      22,
+      26
+     ]
+    ]
+   },
+   {
+    "headline": "34. h3: your usual pattern in passed pawns in the endgame",
+    "verdict": "similar",
+    "text": "In line with your usual play. Across 12 decisions in 6 earlier games with the same kind of decision in the same phase you never went wrong. Here the move cost 5 win-% points (e6 was stronger). e6 advances the passed pawn (-2.7); after h3 it is -3.5.",
+    "refs": [
+     [
+      24,
+      66
+     ],
+     [
+      20,
+      86
+     ],
+     [
+      20,
+      88
+     ],
+     [
+      19,
+      66
+     ]
+    ]
+   }
+  ],
+  "PilotC": [
+   {
+    "headline": "4. Ke2: judged within this game only",
+    "verdict": "narrowed",
+    "text": "Ke2 moved the king before castling while queens are on the board. d3 kept the king safer. Only 1 other game had the same kind of decision in the same phase; 3 are needed to compare. So this is not compared with your usual play yet.",
+    "refs": [
+     [
+      50,
+      6
+     ]
+    ]
+   }
+  ]
+ },
+ "study": {
+  "planted_games_with_pick": "10/12",
+  "pick_shows_weakness": "9/10",
+  "no_pick_when_sparse": true
+ }
+}
