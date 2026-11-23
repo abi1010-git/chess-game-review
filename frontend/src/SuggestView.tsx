@@ -107,6 +107,9 @@ export function SuggestView({ onQueued }: { onQueued: () => void }) {
       {suggestion && (
         <>
           {suggestion.warnings.map((w, i) => <p key={i} className="notice notice-warning">{w}</p>)}
+          {suggestion.advice?.map((a, i) => (
+            <p key={`a${i}`} className={`notice ${a.level === "weak" ? "notice-warning" : "notice-info"}`}><b>History specialist, {a.pool}:</b> {a.text}</p>
+          ))}
           {suggestion.groups.map((g) => (
             <section key={g.key} className={`card group group-${g.role}`}>
               <div className="table-head">

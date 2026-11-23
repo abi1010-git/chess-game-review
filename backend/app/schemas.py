@@ -101,3 +101,15 @@ class BatchOut(BaseModel):
     created_at: datetime
     progress: dict
     summary: dict | None = None
+
+
+class StudyCreate(BaseModel):
+    game_id: int
+    theme: str | None = Field(default=None, max_length=40)
+
+
+class StudyNotes(BaseModel):
+    plans: str | None = Field(default=None, max_length=1000)
+    move: str | None = Field(default=None, max_length=12)
+    reply: str | None = Field(default=None, max_length=12)
+    text: str | None = Field(default=None, max_length=2000)

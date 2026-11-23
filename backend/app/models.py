@@ -238,3 +238,47 @@ class Finding(Base):
     title: Mapped[str] = mapped_column(String(120))
     summary: Mapped[str] = mapped_column(Text)
     evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+# ---------------------------------------------------------------- phase 3: coach reviews and studies
+
+class CoachReview(Base):
+    """A saved "Compare this game" review from the specialist workflow, with its evidence trace.
+
+    One row per (game, analysis version, mode); asking again returns the saved review, so an
+    AI-written review costs model quota only once.
+    """
+    __tablename__ = "coach_reviews"
+    __table_args__ = (UniqueConstraint("game_id", "analysis_version", "mode", name="uq_review_game_version_mode"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id", ondelete="CASCADE"), index=True)
+    analysis_version: Mapped[str] = mapped_column(String(30))
+    mode: Mapped[str] = mapped_column(String(12))  # rules | model
+    provider: Mapped[str | None] = mapped_column(String(40), nullable=True)  # which model wrote it, if any
+    result: Mapped[dict] = mapped_column(JSON, default=dict)
+    trace: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Study(Base):
+    """A whole game picked for study. Answers live in `checkpoints` but are only sent once revealed."""
+    __tablename__ = "studies"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id", ondelete="CASCADE"), index=True)
+    analysis_version: Mapped[str] = mapped_column(String(30))
+    theme: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    title: Mapped[str] = mapped_column(String(200))
+    rationale: Mapped[str] = mapped_column(Text)  # spoiler-free: never names the best move
+    objective: Mapped[str] = mapped_column(Text)
+    start_ply: Mapped[int] = mapped_column(Integer)
+    mode: Mapped[str] = mapped_column(String(12))  # rules | model
+    provider: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    checkpoints: Mapped[list] = mapped_column(JSON, default=list)  # [{ply, prompt, answer{...}}]
+    notes: Mapped[dict] = mapped_column(JSON, default=dict)  # {checkpoint index: {plans, move, reply, text}}
+    revealed: Mapped[list] = mapped_column(JSON, default=list)  # checkpoint indexes the player opened
+    feedback: Mapped[dict] = mapped_column(JSON, default=dict)  # {checkpoint index: coach feedback}
+    trace: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)

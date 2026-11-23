@@ -316,3 +316,17 @@ details summary { cursor: pointer; color: var(--accent); }
 .next-step p { margin: 0; }
 .card.empty .primary, .panel .empty .primary { margin-top: 12px; }
 .brand { cursor: pointer; }
+
+/* ---------------------------------------------------------------- phase 3: coach and study */
+.badge-ai { background: var(--accent-soft); }
+.claims { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.claim p { margin: 4px 0; }
+.trace { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; }
+.pick { border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.pick p { margin: 0; }
+.checkpoint h3 { margin: 0; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--muted); flex: 1; min-width: 0; }
+.field textarea, .field input { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; width: 100%; box-sizing: border-box; }
+.field-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.answer { border-top: 1px solid var(--line); padding-top: 8px; }

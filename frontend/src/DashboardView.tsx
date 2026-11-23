@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api2, type Dashboard, type ThemeItem } from "./api";
+import { api2, coach, type Dashboard, type SavedStudy, type StudyPick, type ThemeItem } from "./api";
 import { TrendChart } from "./charts";
 import { PROVIDER_LABEL, ResultBadge } from "./format";
 import type { Tab } from "./App";
@@ -21,7 +21,10 @@ export function WorkerBanner({ s }: { s: { worker_available: boolean; worker_err
   );
 }
 
-export function DashboardView({ refreshKey, onOpen, onGo }: { refreshKey: number; onOpen: (gameId: number, ply?: number) => void; onGo: (t: Tab) => void }) {
+export function DashboardView({ refreshKey, onOpen, onGo, onStudy, onResume }: {
+  refreshKey: number; onOpen: (gameId: number, ply?: number) => void; onGo: (t: Tab) => void;
+  onStudy: (gameId: number, theme: string | null) => void; onResume: (studyId: number) => void;
+}) {
   const [d, setD] = useState<Dashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = () => api2.dashboard().then(setD).catch((e) => setError(e.message));
@@ -126,27 +129,7 @@ export function DashboardView({ refreshKey, onOpen, onGo }: { refreshKey: number
           )}
         </section>
 
-        <section className="card panel">
-          <h2>What to Study Next</h2>
-          {focus ? (
-            <div className="stack-sm">
-              <p>
-                Your most frequent issue is <b>{focus.label.toLowerCase()}</b>: {focus.occurrences} time{focus.occurrences === 1 ? "" : "s"} in {focus.games} game{focus.games === 1 ? "" : "s"}.
-              </p>
-              {focus.opportunities && (
-                <p className="muted">
-                  You met this kind of position {focus.opportunities.decisions} times across {focus.opportunities.games} games and went wrong {(focus.opportunities.mistake_rate * 100).toFixed(0)}% of the time.
-                </p>
-              )}
-              <button className="primary" onClick={() => onOpen(focus.examples[0].game_id, focus.examples[0].ply)}>
-                Compare the latest example
-              </button>
-              <p className="hint">Whole-game study picks with guided checkpoints arrive in the next build phase. They will keep the answer hidden until you ask for it.</p>
-            </div>
-          ) : (
-            <p className="muted">Study suggestions appear once a few games are analyzed.</p>
-          )}
-        </section>
+        <StudyPanel refreshKey={refreshKey} analyzed={c.analyzed} focus={focus} onOpen={onOpen} onStudy={onStudy} onResume={onResume} />
       </div>
     </div>
   );
@@ -168,5 +151,58 @@ function ThemeRow({ t, onOpen }: { t: ThemeItem; onOpen: (gameId: number, ply?: 
         {ex && <> · <button className="link" onClick={() => onOpen(ex.game_id, ex.ply)}>latest example</button></>}
       </div>
     </li>
+  );
+}
+
+function StudyPanel({ refreshKey, analyzed, focus, onOpen, onStudy, onResume }: {
+  refreshKey: number; analyzed: number; focus: ThemeItem | undefined;
+  onOpen: (gameId: number, ply?: number) => void; onStudy: (gameId: number, theme: string | null) => void; onResume: (studyId: number) => void;
+}) {
+  const [data, setData] = useState<{ picks: StudyPick[]; saved: SavedStudy[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (analyzed === 0) return;
+    coach.studies().then(setData).catch((e) => setError(e.message));
+  }, [refreshKey, analyzed]);
+
+  return (
+    <section className="card panel">
+      <h2>What to Study Next</h2>
+      {analyzed === 0 ? (
+        <p className="muted">Study suggestions appear once a few games are analyzed.</p>
+      ) : error ? <p className="error">{error}</p> : !data ? <p className="muted">Picking games…</p> : (
+        <div className="stack-sm">
+          {focus && (
+            <p className="small">
+              Your most frequent issue is <b>{focus.label.toLowerCase()}</b>: {focus.occurrences} time{focus.occurrences === 1 ? "" : "s"} in {focus.games} game{focus.games === 1 ? "" : "s"}.{" "}
+              <button className="link" onClick={() => onOpen(focus.examples[0].game_id, focus.examples[0].ply)}>Latest example</button>
+            </p>
+          )}
+          {data.picks.length === 0 && <p className="muted">No game stands out for study yet. Analyze a few more games.</p>}
+          {data.picks.map((p) => (
+            <div key={p.game_id} className="pick">
+              <div className="theme-head"><span className="badge">{p.theme_label}</span><ResultBadge result={p.result} /></div>
+              <b>vs {p.opponent ?? "Unknown"}</b> <span className="muted small">· {p.time_class}{p.played_at ? ` · ${p.played_at.slice(0, 10)}` : ""}</span>
+              <p className="small">{p.reason}</p>
+              <p className="muted small">Start from move {p.start_move}. The answers stay hidden until you ask for them.</p>
+              <button className="primary" onClick={() => onStudy(p.game_id, p.theme)}>Study this game</button>
+            </div>
+          ))}
+          {data.saved.length > 0 && (
+            <>
+              <h3 className="gap">Your studies</h3>
+              <ul className="themes">
+                {data.saved.map((s) => (
+                  <li key={s.id}>
+                    <button className="link" onClick={() => onResume(s.id)}>{s.title}</button>
+                    <span className="muted small"> · {s.revealed} of {s.checkpoints} checkpoints done</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

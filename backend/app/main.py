@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Annotated, Callable
 
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
@@ -17,7 +17,8 @@ from .importers.base import ProviderError, RetryPolicy, make_client, validate_us
 from .importers.chesscom import ChessComAdapter
 from .importers.lichess import LichessAdapter
 from .importers.service import execute_import, remember_identity
-from .models import AnalysisBatch, AnalysisJob, Game, ImportRun, WorkerHeartbeat, utcnow
+from .coach import service as coach_service
+from .models import AnalysisBatch, AnalysisJob, Game, ImportRun, Study, WorkerHeartbeat, utcnow
 from .pgn_parse import inspect_names
 from .schemas import (
     AccountImportRequest,
@@ -28,6 +29,8 @@ from .schemas import (
     GamePage,
     ImportRunOut,
     SelectionRequest,
+    StudyCreate,
+    StudyNotes,
     SuggestRequest,
 )
 
@@ -248,6 +251,8 @@ def suggest_selection(body: SuggestRequest, s: SessionDep, profile_id: ProfileDe
                                rating_band=body.rating_band, max_comparison=body.max_comparison)
     all_ids = [gid for g in result["groups"] for gid in g["game_ids"]]
     result["preview"] = jobs.preview(s, profile_id, all_ids) if all_ids else None
+    from .coach.advice import sample_advice
+    result["advice"] = sample_advice(s, profile_id, result)
     return result
 
 
@@ -329,6 +334,104 @@ def get_report(game_id: int, s: SessionDep, profile_id: ProfileDep):
     game["analysis_status"] = _with_status(s, [g])[0]["analysis_status"]
     report = compare.game_report(s, g)
     return {"game": game, "report": report, **worker_status(s)}
+
+
+# ---------------------------------------------------------------- phase 3: coach reviews and studies
+
+def visitor_id(request: Request) -> str:
+    """Who is asking, for the per-visitor model limit (first proxy hop on hosted deploys)."""
+    fwd = request.headers.get("x-forwarded-for")
+    return (fwd.split(",")[0].strip() if fwd else None) or (request.client.host if request.client else "local")
+
+
+VisitorDep = Annotated[str, Depends(visitor_id)]
+
+
+def _own_game(s: Session, game_id: int, profile_id: int) -> Game:
+    g = s.get(Game, game_id)
+    if g is None or g.profile_id != profile_id:
+        raise HTTPException(404, "Game not found.")
+    return g
+
+
+def _own_study(s: Session, study_id: int, profile_id: int) -> Study:
+    st = s.get(Study, study_id)
+    if st is None or st.profile_id != profile_id:
+        raise HTTPException(404, "Study not found.")
+    return st
+
+
+@app.get("/api/coach/status")
+def coach_status(visitor: VisitorDep):
+    return coach_service.coach_status(visitor)
+
+
+@app.get("/api/games/{game_id}/coach-review")
+def get_coach_review(game_id: int, s: SessionDep, profile_id: ProfileDep):
+    return {"review": coach_service.cached_review(s, _own_game(s, game_id, profile_id))}
+
+
+@app.post("/api/games/{game_id}/coach-review")
+def run_coach_review(game_id: int, s: SessionDep, profile_id: ProfileDep, visitor: VisitorDep,
+                     mode: str = Query("auto", pattern="^(auto|rules)$")):
+    g = _own_game(s, game_id, profile_id)
+    try:
+        return {"review": coach_service.review_game(s, g, visitor, mode)}
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.get("/api/studies")
+def list_studies(s: SessionDep, profile_id: ProfileDep):
+    from .coach.study import study_picks
+    return study_picks(s, profile_id)
+
+
+@app.post("/api/studies", status_code=201)
+def create_study(body: StudyCreate, s: SessionDep, profile_id: ProfileDep, visitor: VisitorDep):
+    g = _own_game(s, body.game_id, profile_id)
+    try:
+        st = coach_service.create_study(s, g, body.theme, visitor)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    return coach_service.study_out(st, g)
+
+
+@app.get("/api/studies/{study_id}")
+def get_study(study_id: int, s: SessionDep, profile_id: ProfileDep):
+    st = _own_study(s, study_id, profile_id)
+    return coach_service.study_out(st, s.get(Game, st.game_id))
+
+
+def _checkpoint(st: Study, index: int) -> None:
+    if not 0 <= index < len(st.checkpoints):
+        raise HTTPException(404, "Checkpoint not found.")
+
+
+@app.put("/api/studies/{study_id}/checkpoints/{index}")
+def save_study_notes(study_id: int, index: int, body: StudyNotes, s: SessionDep, profile_id: ProfileDep):
+    st = _own_study(s, study_id, profile_id)
+    _checkpoint(st, index)
+    try:
+        coach_service.save_notes(s, st, index, body.plans, body.move, body.reply, body.text)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    return coach_service.study_out(st, s.get(Game, st.game_id))
+
+
+@app.post("/api/studies/{study_id}/checkpoints/{index}/reveal")
+def reveal_checkpoint(study_id: int, index: int, s: SessionDep, profile_id: ProfileDep, visitor: VisitorDep):
+    st = _own_study(s, study_id, profile_id)
+    _checkpoint(st, index)
+    coach_service.reveal(s, st, index, visitor)
+    return coach_service.study_out(st, s.get(Game, st.game_id))
+
+
+@app.delete("/api/studies/{study_id}", status_code=204)
+def delete_study(study_id: int, s: SessionDep, profile_id: ProfileDep):
+    st = _own_study(s, study_id, profile_id)
+    s.delete(st)
+    s.commit()
 
 
 # ---------------------------------------------------------------- built frontend (single-container deploys)

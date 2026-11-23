@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api2, type Comparison, type Decision, type Finding, type GameReport, type LossClaim, type Ply } from "./api";
 import { Board } from "./Board";
+import { CoachCard } from "./CoachCard";
 import { EvalGraph } from "./charts";
 import { WorkerBanner } from "./DashboardView";
 import { formatDate, PROVIDER_LABEL, ResultBadge, StatusBadge } from "./format";
@@ -25,8 +26,9 @@ function evalText(cp: number | null, mate: number | null) {
   return `${(cp ?? 0) >= 0 ? "+" : ""}${((cp ?? 0) / 100).toFixed(1)}`;
 }
 
-export function ReportView({ gameId, initialPly, onOpen, onBack }: {
+export function ReportView({ gameId, initialPly, onOpen, onBack, onStudy }: {
   gameId: number; initialPly?: number; onOpen: (gameId: number, ply?: number) => void; onBack: () => void;
+  onStudy: (gameId: number, theme: string | null) => void;
 }) {
   const [data, setData] = useState<GameReport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -131,6 +133,7 @@ export function ReportView({ gameId, initialPly, onOpen, onBack }: {
       {header}
       <Verdict r={r} onJump={setPly} />
       {r.loss && <LossCard loss={r.loss} onJump={setPly} />}
+      <CoachCard gameId={g.id} onJump={setPly} onOpen={onOpen} onStudy={onStudy} />
 
       <div className="phase-cards">
         {PHASES.map((ph) => {

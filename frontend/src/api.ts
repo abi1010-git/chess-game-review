@@ -86,7 +86,7 @@ export type SuggestGroup = {
   game_ids: number[];
 };
 
-export type Suggestion = { groups: SuggestGroup[]; warnings: string[]; preview: Preview | null };
+export type Suggestion = { groups: SuggestGroup[]; warnings: string[]; preview: Preview | null; advice?: { pool: string; level: "good" | "thin" | "weak"; text: string }[] };
 
 export type Batch = {
   id: number;
@@ -351,4 +351,107 @@ export const api2 = {
   report: (gameId: number) => request<GameReport>(`/games/${gameId}/report`),
   queue: () => request<QueueSummary>("/analysis/queue"),
   queueGames: (ids: number[]) => request<Batch>("/analysis/batches", json({ game_ids: ids, mode: "manual" })),
+};
+
+// ---------------------------------------------------------------- phase 3: coach reviews and guided study
+
+export type Ref = { game_id: number; ply: number };
+
+export type CoachClaim = {
+  ply: number;
+  verdict: "better" | "worse" | "similar" | "mixed" | "insufficient" | "narrowed";
+  headline: string;
+  text: string;
+  refs: Ref[];
+  match_quality: "exact" | "structure" | "theme" | "phase" | "none";
+  searches: number;
+  source: "rules" | "model";
+};
+
+export type TraceStep = { actor: string; action: string; detail: Record<string, unknown> };
+
+export type CoachReview = {
+  id: number;
+  game_id: number;
+  mode: "rules" | "model";
+  provider: string | null;
+  created_at: string;
+  summary: string;
+  claims: CoachClaim[];
+  recommended_study: { game_id: number; theme: string; theme_label: string; reason: string; from_ply: number } | null;
+  handoffs: number;
+  tool_calls: number;
+  fallbacks: string[];
+  trace: TraceStep[];
+};
+
+export type StudyPick = {
+  game_id: number;
+  theme: string | null;
+  theme_label: string;
+  reason: string;
+  opponent: string | null;
+  result: Game["player_result"];
+  played_at: string | null;
+  time_class: string;
+  color: "white" | "black";
+  start_move: number;
+};
+
+export type SavedStudy = { id: number; game_id: number; title: string; theme: string | null; checkpoints: number; revealed: number; notes: number; updated_at: string };
+
+export type StudyNotes = { plans?: string; move?: string | null; reply?: string | null; text?: string };
+
+export type StudyCheckpoint = {
+  index: number;
+  ply: number;
+  move_number: number;
+  side: "white" | "black";
+  fen: string;
+  prompt: string;
+  notes: StudyNotes;
+  revealed: boolean;
+  answer?: {
+    played: string; best: string | null; best_line: string[]; candidates: { san: string; win: number }[];
+    win_before: number; win_after: number; verdict: string; explanation: string;
+  };
+  feedback?: { text: string; source: "rules" | "model"; provider: string | null } | null;
+};
+
+export type Study = {
+  id: number;
+  game_id: number;
+  title: string;
+  rationale: string;
+  objective: string;
+  theme: string | null;
+  start_ply: number;
+  mode: "rules" | "model";
+  provider: string | null;
+  game: { opponent: string | null; opponent_rating: number | null; player_rating: number | null; color: "white" | "black"; result: Game["player_result"]; played_at: string | null; time_class: string; opening: string | null; provider: string };
+  positions: string[];
+  moves: string[];
+  checkpoints: StudyCheckpoint[];
+};
+
+export type CoachStatus = {
+  enabled: boolean;
+  providers: { name: string; label: string; model: string; available: boolean; cooling_down: boolean; used_today: number; daily_budget: number }[];
+  visitor_runs_left_this_hour: number;
+};
+
+export type SampleAdvice = { pool: string; level: "good" | "thin" | "weak"; text: string; targets: number; comparisons: number };
+
+const put = (body: unknown): RequestInit => ({ method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+export const coach = {
+  status: () => request<CoachStatus>("/coach/status"),
+  review: (gameId: number) => request<{ review: CoachReview | null }>(`/games/${gameId}/coach-review`),
+  runReview: (gameId: number) => request<{ review: CoachReview }>(`/games/${gameId}/coach-review`, { method: "POST" }),
+  studies: () => request<{ picks: StudyPick[]; saved: SavedStudy[] }>("/studies"),
+  createStudy: (gameId: number, theme: string | null) => request<Study>("/studies", json({ game_id: gameId, theme })),
+  study: (id: number) => request<Study>(`/studies/${id}`),
+  saveNotes: (id: number, index: number, notes: StudyNotes) => request<Study>(`/studies/${id}/checkpoints/${index}`, put(notes)),
+  reveal: (id: number, index: number) => request<Study>(`/studies/${id}/checkpoints/${index}/reveal`, { method: "POST" }),
+  deleteStudy: (id: number) => fetch(`/api/studies/${id}`, { method: "DELETE" }),
 };

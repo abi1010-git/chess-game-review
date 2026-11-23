@@ -7,3 +7,7 @@ frontend/dist/
 backend/engines/
 .claude/settings.local.json
 frontend/*.tsbuildinfo
+
+# Local secrets (API keys)
+.env
+*.env

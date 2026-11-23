@@ -18,9 +18,10 @@ Most game reviews look at one game at a time, so it's hard to notice patterns. C
 - **Am I improving?** Accuracy by month, and mistake rates in the opening, middlegame and endgame.
 - **Why did I lose this game?** It separates the earlier move that made things difficult from the move that actually lost, and any later chance you missed.
 - **Did I handle this better before?** Key decisions in a game are compared with your own earlier decisions in the same or similar positions.
-- **What should I study next?** Your most frequent issue, with a link to the latest example.
+- **What should I study next?** One or two whole games picked to practise your most frequent issue, with guided checkpoints that keep the answer hidden until you ask.
+- **Can a coach walk me through it?** A coach review compares a game's key decisions with your earlier games and recommends a game to study, with every claim checked against the engine's evidence.
 
-Every move you play is checked by **Stockfish 18**. Explanations come from the engine's lines and the board itself (lost material, forks, pawn breaks, king safety, passed pawns), not from an AI chatbot, so they don't make things up. When the engine's quick check and its deeper check disagree, the finding is marked **uncertain**.
+Every move you play is checked by **Stockfish 18**. Explanations come from the engine's lines and the board itself (lost material, forks, pawn breaks, king safety, passed pawns). When an AI model is available it can choose what to compare and write the explanations in plainer language, but every move and number it mentions is checked against the stored evidence first, and anything it can't back up is replaced with the standard explanation. When the engine's quick check and its deeper check disagree, the finding is marked **uncertain**.
 
 Forced moves, obvious recaptures and positions that were already won or lost are not judged, so you only see decisions that mattered.
 
@@ -30,7 +31,8 @@ Forced moves, obvious recaptures and positions that were already won or lost are
 2. **Import your games.** Enter a Lichess or Chess.com username, or upload a PGN file. For a PGN, choose which player is you.
 3. **Pick games to analyze.** Filter by date, time control, colour or result and select games, or use **Suggest a set** to compare a recent period with your earlier games at a similar rating.
 4. **Wait for the analysis.** The **Analysis** tab shows progress. Each game takes a few minutes.
-5. **Read your results.** **Your progress** shows trends, recurring mistakes and strengths. Click any game to open its report: the board, every move, a graph of your winning chances, findings by phase and comparisons with your earlier games.
+5. **Read your results.** **Your progress** shows trends, recurring mistakes and strengths. Click any game to open its report: the board, every move, a graph of your winning chances, findings by phase and comparisons with your earlier games. Press **Review with coach** for a guided comparison.
+6. **Study a game.** Under **What to Study Next**, pick a game. Play through it, and at each checkpoint write down your plans, choose a move and predict the reply before you reveal what the engine thinks. Your notes are saved.
 
 ### Tips
 
@@ -94,6 +96,20 @@ The public site runs this image on [Render](https://render.com)'s free plan (512
 - Similar decisions are matched by exact position first, then by the same material and pawn structure, then by the same kind of decision in the same phase.
 - Jobs are claimed with a lease and results are written in the same transaction that marks the job done, so a cancelled or restarted job never leaves half-written results.
 
+### How the coach works
+
+The coach is a [LangGraph](https://github.com/langchain-ai/langgraph) workflow of specialists with typed inputs and outputs:
+
+- **Game reviewer** picks the decisions worth comparing and calls tools for the engine's line and the board features.
+- **History specialist** searches your earlier games: exact position first, then the same pawn structure, then the same kind of decision. When a match is weak it searches again more broadly; when it is still weak it tells the reviewer to narrow the claim to this game only.
+- **Writer** drafts each explanation from templates, or with an AI model when one is configured.
+- **Verifier** checks every referenced move exists and that the text names no move or number outside the evidence.
+- **Study coach** picks a whole game that shows the same kind of decision, skipping games that are too forced or have no clear lesson.
+
+Handoffs, searches and tool calls are capped, and every step is recorded so you can see how a review was made (**Show how the coach worked**). Reviews are saved, so asking again costs no model quota.
+
+AI calls go through a router that tries free providers in order of quality (Gemini, Groq, Cerebras, Mistral, OpenRouter, GitHub Models), skips any that is rate-limited or over the app's own budget, and moves on when a reply fails, times out or can't be verified. If none can answer, the rule-based text is used. Keys are read only from environment variables and are never shown by the app.
+
 ### Configuration
 
 | Variable | Default | Purpose |
@@ -109,6 +125,12 @@ The public site runs this image on [Render](https://render.com)'s free plan (512
 | `CORS_ORIGINS` | `http://localhost:5173` | Allowed frontend origins |
 | `WORKER_LEASE_SECONDS` | 300 | How long a job stays claimed without a heartbeat |
 | `ENGINE_ALLOW_MISMATCH` | off | Set to `1` to run a different engine build than the analysis version names |
+| `GEMINI_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY`, `GITHUB_MODELS_TOKEN` | none | Free-tier AI providers for the coach. Set any you have; with none, the coach uses its rule-based mode |
+| `LLM_ORDER` | quality order | Preferred providers, e.g. `gemini,groq,openrouter` |
+| `<NAME>_MODEL` | see `coach/llm.py` | Model for one provider, e.g. `GEMINI_MODEL` |
+| `LLM_<NAME>_RPM`, `LLM_<NAME>_RPD` | below each free tier | The app's own per-minute and per-day budget for one provider |
+| `COACH_MODEL_RUNS_PER_HOUR` | 20 | AI-written reviews per visitor per hour before falling back to rules |
+| `LLM_DISABLED` | off | Set to `1` to never call a model |
 
 ### Project layout
 
@@ -123,13 +145,14 @@ backend/app/
   findings.py     mistake and strength detectors
   compare.py      matching similar decisions, loss explanations, game reports
   dashboard.py    "Your progress"
+  coach/          phase 3: LangGraph specialists (reviewer, history, study coach), tools, verifier, LLM router
   worker.py       the analysis worker
   main.py         API routes, and serves the built website
 backend/tests/    unit and API tests
-frontend/src/     React screens: Import, Pick games, Analysis, Your progress, Suggest a set, Game report
+frontend/src/     React screens: Import, Pick games, Analysis, Your progress, Suggest a set, Game report, Coach review, Study
 ```
 
 ### Planned
 
-- Study plans: whole games picked for review, with guided checkpoints that keep the answer hidden until you ask.
+- An evaluation of the coach: AI-written against rule-based reviews, on the same games.
 - Accounts, so each player has their own private history.
