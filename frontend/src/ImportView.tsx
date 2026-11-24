@@ -83,8 +83,8 @@ export function ImportView({ onImported, onNext }: { onImported: () => void; onN
 
       {doneWithGames && !anyActive && (
         <section className="card next-step">
-          <p><b>Games imported.</b> Next, choose which ones to analyze.</p>
-          <button className="primary" onClick={onNext}>Pick games to analyze →</button>
+          <p><b>Games imported.</b> Next, choose which games to analyze. The app marks the ones it suggests.</p>
+          <button className="primary" onClick={onNext}>Choose games to analyze →</button>
         </section>
       )}
 

@@ -309,15 +309,23 @@ def game_filter(
     rated: bool | None = None,
     result: Annotated[list[str], Query()] = [],
     analysis: str | None = None,
+    suggested: bool = False,
 ) -> selection.GameFilter:
     return selection.GameFilter(date_from, date_to, time_class, provider, color, rating_min, rating_max,
-                                rated, result, analysis)
+                                rated, result, analysis, suggested)
 
 
 FilterDep = Annotated[selection.GameFilter, Depends(game_filter)]
 
 
-def _with_status(s: Session, games: list[Game]) -> list[dict]:
+def _filtered(s: Session, stmt, f: selection.GameFilter, profile_id: int):
+    stmt = selection.apply_filter(stmt, f, profile_id)
+    if f.suggested:
+        stmt = stmt.where(Game.id.in_(list(selection.default_suggestion(s, profile_id)["roles"]) or [-1]))
+    return stmt
+
+
+def _with_status(s: Session, games: list[Game], roles: dict | None = None) -> list[dict]:
     ids = [g.id for g in games]
     statuses = dict(s.execute(select(AnalysisJob.game_id, AnalysisJob.status).where(
         AnalysisJob.game_id.in_(ids), AnalysisJob.analysis_version == config.ANALYSIS_VERSION)).all()) if ids else {}
@@ -332,6 +340,7 @@ def _with_status(s: Session, games: list[Game]) -> list[dict]:
         d = GameOut.model_validate(g).model_dump()
         d["analysis_status"] = statuses.get(g.id, "none")
         d["outdated_version"] = older.get(g.id) if g.id not in current else None
+        d["suggested"] = (roles or {}).get(g.id)
         out.append(d)
     return out
 
@@ -339,17 +348,17 @@ def _with_status(s: Session, games: list[Game]) -> list[dict]:
 @app.get("/api/games", response_model=GamePage)
 def list_games(s: SessionDep, profile_id: ProfileDep, f: FilterDep,
                limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
-    total = s.scalar(selection.apply_filter(select(func.count(Game.id)), f, profile_id))
-    stmt = selection.apply_filter(select(Game), f, profile_id)
+    total = s.scalar(_filtered(s, select(func.count(Game.id)), f, profile_id))
+    stmt = _filtered(s, select(Game), f, profile_id)
     stmt = stmt.order_by(Game.played_at.desc().nulls_last(), Game.id.desc()).limit(limit).offset(offset)
-    return {"total": total, "items": _with_status(s, list(s.scalars(stmt)))}
+    roles = selection.default_suggestion(s, profile_id)["roles"] if total else {}
+    return {"total": total, "items": _with_status(s, list(s.scalars(stmt)), roles)}
 
 
 @app.get("/api/games/ids")
 def list_game_ids(s: SessionDep, profile_id: ProfileDep, f: FilterDep):
     """All ids matching the filter, for 'select the whole filtered set'."""
-    ids = list(s.scalars(selection.apply_filter(select(Game.id), f, profile_id)
-                         .limit(config.MAX_GAMES_PER_BATCH + 1)))
+    ids = list(s.scalars(_filtered(s, select(Game.id), f, profile_id).limit(config.MAX_GAMES_PER_BATCH + 1)))
     return {"ids": ids[: config.MAX_GAMES_PER_BATCH], "truncated": len(ids) > config.MAX_GAMES_PER_BATCH}
 
 

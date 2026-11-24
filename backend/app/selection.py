@@ -26,6 +26,7 @@ class GameFilter:
     rated: bool | None = None
     results: list[str] = field(default_factory=list)
     analysis: str | None = None  # analyzed | not_analyzed | queued
+    suggested: bool = False      # only games the app suggests analyzing (applied by the API, see default_suggestion)
 
 
 def _start(d: date) -> datetime:
@@ -91,6 +92,27 @@ def pool_label(key: tuple[str, str, bool | None]) -> str:
     provider, tc, rated = key
     rated_txt = "rated" if rated else "casual" if rated is False else "rated/casual unknown"
     return f"{POOL_LABELS.get(provider, provider)} {tc} ({rated_txt})"
+
+
+def default_suggestion(s: Session, profile_id: int) -> dict:
+    """The app's own pick for a first analysis: the player's latest games and earlier games to compare them with.
+
+    The period is the 30 days ending at the newest game (widened to 90 days, then a year, when that holds
+    fewer than 5 games). Returns {"roles": {game_id: "target" | "comparison"}, "from", "to"}.
+    """
+    latest = s.scalar(select(func.max(Game.played_at)).where(Game.profile_id == profile_id))
+    if latest is None:
+        return {"roles": {}, "from": None, "to": None}
+    end = latest.date()
+    for days in (30, 90, 365):
+        start = end - timedelta(days=days - 1)
+        n = s.scalar(select(func.count(Game.id)).where(Game.profile_id == profile_id,
+                                                      Game.played_at >= _start(start))) or 0
+        if n >= 5:
+            break
+    result = suggest(s, profile_id, start, end)
+    roles = {gid: g["role"] for g in result["groups"] for gid in g["game_ids"]}
+    return {"roles": roles, "from": start.isoformat(), "to": end.isoformat()}
 
 
 def suggest(s: Session, profile_id: int, target_from: date, target_to: date, *, rating_band: int = 100,

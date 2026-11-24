@@ -62,6 +62,7 @@ class GameOut(BaseModel):
     opening: str | None
     termination: str | None
     analysis_status: str = "none"
+    suggested: str | None = None  # "target" or "comparison" when the app suggests analyzing this game
     outdated_version: str | None = None  # analyzed only under this older analysis version
 
 

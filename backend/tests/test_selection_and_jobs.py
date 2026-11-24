@@ -175,3 +175,17 @@ def test_cancel_batch_stops_running_and_queued_jobs(client, history):
         assert jobs.complete(s, running.id, "w") is False  # a cancelled job is never marked complete
     progress = client.get(f"/api/analysis/batches/{b['id']}").json()["progress"]
     assert progress["counts"] == {"cancelled": 2}
+
+
+def test_games_list_marks_suggested_games_and_can_filter_to_them(client, history):
+    allg = client.get("/api/games", params={"limit": 200}).json()
+    marked = {g["id"]: g["suggested"] for g in allg["items"] if g["suggested"]}
+    assert marked and set(marked.values()) <= {"target", "comparison"}
+    assert marked.get(history["t1"]) == "target" or marked.get(history["after"]) == "target"  # latest games lead
+    only = client.get("/api/games", params={"suggested": "true", "limit": 200}).json()
+    assert {g["id"] for g in only["items"]} == set(marked) and only["total"] == len(marked)
+    assert only["total"] < allg["total"]  # a filter, not everything
+    ids = client.get("/api/games/ids", params={"suggested": "true"}).json()["ids"]
+    assert set(ids) == set(marked)
+    # combines with other filters, and never leaks other profiles' games
+    assert client.get("/api/games", params={"suggested": "true", "color": "black"}).json()["total"] <= only["total"]

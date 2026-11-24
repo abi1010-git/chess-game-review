@@ -47,6 +47,13 @@ export function GameRow({ g, checked, onToggle, onOpen }: { g: Game; checked?: b
           <>vs {g.opponent_name ?? "Unknown"}</>
         )}
         {g.opponent_rating ? <span className="muted"> ({g.opponent_rating})</span> : null}
+        {g.suggested && (
+          <span className="badge suggested" title={g.suggested === "target"
+            ? "Suggested: one of your latest games, worth analyzing first"
+            : "Suggested: an earlier game that the latest games are compared with"}>
+            Suggested{g.suggested === "comparison" ? " · for comparison" : ""}
+          </span>
+        )}
       </td>
       <td><ResultBadge result={g.player_result} /></td>
       <td className="nowrap">{g.player_rating ?? <span className="muted">—</span>}</td>

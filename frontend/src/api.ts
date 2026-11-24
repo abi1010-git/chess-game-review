@@ -44,6 +44,7 @@ export type Game = {
   eco: string | null;
   analysis_status: string;
   outdated_version?: string | null;
+  suggested?: "target" | "comparison" | null;
 };
 
 export type Facets = {
@@ -67,6 +68,7 @@ export type Filters = {
   rated?: string;
   result?: string[];
   analysis?: string;
+  suggested?: string;
 };
 
 export type Preview = {

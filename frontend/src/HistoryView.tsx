@@ -7,7 +7,8 @@ const PAGE = 50;
 
 export function HistoryView({ refreshKey, onQueued, onOpen, onGo }: { refreshKey: number; onQueued: () => void; onOpen: (id: number) => void; onGo: (t: Tab) => void }) {
   const [facets, setFacets] = useState<Facets | null>(null);
-  const [filters, setFilters] = useState<Filters>({});
+  const [filters, setFilters] = useState<Filters>({ suggested: "1" });  // start with the app's suggestions
+  const [autoCleared, setAutoCleared] = useState(false);
   const [page, setPage] = useState(0);
   const [data, setData] = useState<{ total: number; items: Game[] } | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -24,6 +25,13 @@ export function HistoryView({ refreshKey, onQueued, onOpen, onGo }: { refreshKey
   useEffect(() => {
     api.games(filters, PAGE, page * PAGE).then(setData).catch((e) => setError(e.message));
   }, [filters, page, refreshKey, reloadKey]);
+
+  useEffect(() => {  // nothing to suggest (e.g. games without dates): show every game instead
+    if (!autoCleared && filters.suggested && data && data.total === 0 && facets && facets.total > 0) {
+      setAutoCleared(true);
+      setFilters({});
+    }
+  }, [data, facets]);
 
   const selectedIds = useMemo(() => [...selected], [selected]);
   useEffect(() => {
@@ -99,6 +107,10 @@ export function HistoryView({ refreshKey, onQueued, onOpen, onGo }: { refreshKey
 
   return (
     <div className="stack">
+      <p className="notice notice-info">
+        Games marked <span className="badge suggested">Suggested</span> are the app's pick: your latest games plus earlier ones to compare them with.
+        Tick them (or press <b>Select all</b>) to analyze them, or clear the <b>Suggested</b> filter to choose any game yourself.
+      </p>
       <section className="card filters">
         <div className="filter-row">
           <label>From<input type="date" value={filters.date_from ?? ""} min={facets?.date_min ?? undefined} onChange={(e) => set("date_from", e.target.value)} /></label>
@@ -121,6 +133,7 @@ export function HistoryView({ refreshKey, onQueued, onOpen, onGo }: { refreshKey
           {facets?.time_classes.map((tc) => (
             <button key={tc} className={`chip ${filters.time_class?.includes(tc) ? "on" : ""}`} onClick={() => toggleList("time_class", tc)}>{tc}</button>
           ))}
+          <button className={`chip ${filters.suggested ? "on" : ""}`} onClick={() => set("suggested", filters.suggested ? "" : "1")}>Suggested</button>
           <span className="sep" />
           {facets?.providers.map((p) => (
             <button key={p} className={`chip ${filters.provider?.includes(p) ? "on" : ""}`} onClick={() => toggleList("provider", p)}>{PROVIDER_LABEL[p] ?? p}</button>

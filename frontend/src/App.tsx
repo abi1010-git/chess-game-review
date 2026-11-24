@@ -16,7 +16,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "history", label: "2. Pick games" },
   { id: "queue", label: "3. Analysis" },
   { id: "home", label: "Your progress" },
-  { id: "suggest", label: "Suggest a set" },
+  { id: "suggest", label: "Suggest by period" },
 ];
 
 /** The tab named in the address bar (#import, #history, ...), if any. */
