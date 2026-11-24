@@ -150,9 +150,16 @@ def compare_decision(target: Decision, target_game: Game, pool: list[Decision], 
             if len(thematic) >= THEME_EXAMPLES:
                 break
     examples = [(d, "exact") for d in exact] + [(d, "structure") for d in structure] + [(d, "theme") for d in thematic]
-    quality = "exact" if exact else "structure" if structure else "theme" if thematic else "none"
-
-    ds = [d for d, _ in examples]
+    # The verdict uses the closest kind of match that has at least MIN_GAMES distinct games, like the
+    # coach does; mixing in looser matches would dilute an exact record (and contradict the coach).
+    levels = [("exact", exact), ("structure", exact + structure), ("theme", exact + structure + thematic)]
+    quality, basis = "none", []
+    for name, ds_level in levels:
+        if ds_level:
+            quality, basis = name, ds_level
+            if len({d.game_id for d in ds_level}) >= MIN_GAMES:
+                break
+    ds = basis
     n_games = len({d.game_id for d in ds})
     stats = {
         "examples": len(ds), "games": n_games, "match_quality": quality,
@@ -463,7 +470,7 @@ def theme_recurrence(all_dec: list[Decision], theme: str, exclude_game: int | No
     n_opps = len(rel)
     mistakes = sum(d.drop >= MISTAKE for d in rel)
     rate = mistakes / n_opps if n_opps else 0.0
-    if len(bad_games) >= 3 and n_opps >= 8 and rate >= 0.25:
+    if len(bad_games) >= 3 and n_opps >= 8 and len(bad_games) / len(games) >= 0.2:  # same rule as the dashboard
         status = "recurring"
         text = (f"A recurring weakness: it went wrong in {len(bad_games)} of {len(games)} other games "
                 f"({by_result['win']} wins, {by_result['draw']} draws, {by_result['loss']} losses).")

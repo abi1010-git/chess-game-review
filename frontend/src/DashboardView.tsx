@@ -16,7 +16,7 @@ export function WorkerBanner({ s }: { s: { worker_available: boolean; worker_err
     <p className={`notice ${s.worker_error ? "notice-error" : "notice-warning"}`}>
       {s.worker_error
         ? `The analysis worker could not start: ${s.worker_error}`
-        : "The analysis engine isn't running right now, so queued games are waiting. If you run the app yourself, start it with: python -m app.worker (in backend/)."}
+        : "The analysis engine isn't responding right now, so queued games are waiting. On the public site it usually restarts within a minute; if you run the app yourself, start it with: python -m app.worker (in backend/)."}
     </p>
   );
 }
@@ -43,7 +43,7 @@ export function DashboardView({ refreshKey, onOpen, onGo, onStudy, onResume }: {
 
   return (
     <div className="stack">
-      <WorkerBanner s={d} />
+      {(d.coverage.queued + d.coverage.running > 0 || d.worker_error) && <WorkerBanner s={d} />}
       <div className="home">
         <section className="card panel">
           <div className="table-head">

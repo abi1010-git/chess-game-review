@@ -42,6 +42,13 @@ export function App() {
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
+  // The free host sleeps when idle; tell a visitor why the first load is slow instead of showing nothing.
+  const [waking, setWaking] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setWaking(true), 3500);
+    fetch("/api/health").catch(() => undefined).finally(() => { clearTimeout(timer); setWaking(false); });
+    return () => clearTimeout(timer);
+  }, []);
   const [report, setReport] = useState<{ gameId: number; ply?: number; from: Tab } | null>(null);
   const [study, setStudy] = useState<number | null>(null);
   const [studyError, setStudyError] = useState<string | null>(null);
@@ -82,6 +89,11 @@ export function App() {
           ))}
         </nav>
       </header>
+      {waking && (
+        <p className="notice notice-info waking">
+          <span className="spinner" style={{ display: "inline-block" }} /> Waking up the server. It sleeps when nobody is using it, so the first visit can take up to a minute.
+        </p>
+      )}
       <SpaceBar version={gamesVersion} onChanged={() => { setReport(null); setStudy(null); setTab(tabFromHash() ?? "home"); bumpGames(); bumpQueue(); }} />
       <main>
         {/* Keep the import view mounted so its progress polling continues on other tabs. */}

@@ -10,6 +10,14 @@ Works with **Lichess**, **Chess.com** and **PGN files**. Free, no account needed
 
 ---
 
+## See it
+
+| Your progress | Coach review, citing earlier games | Game report with the board |
+| --- | --- | --- |
+| ![Dashboard](docs/screenshots/dashboard.jpg) | ![Coach review](docs/screenshots/coach-review.jpg) | ![Game report](docs/screenshots/game-report.jpg) |
+
+(Screenshots use the built-in sample history: 24 engine-played games with a planted weakness. Press **Try a sample history** on the site to explore it yourself.)
+
 ## What it does
 
 Most game reviews look at one game at a time, so it's hard to notice patterns. Chess Game Review looks at your games together and answers questions like:

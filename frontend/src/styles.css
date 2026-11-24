@@ -338,3 +338,4 @@ details summary { cursor: pointer; color: var(--accent); }
 button.danger { background: var(--err); color: #fff; border-color: var(--err); }
 button.linkbtn { background: none; border: none; padding: 0; color: inherit; cursor: pointer; font: inherit; }
 .badge.suggested { background: var(--info-soft); color: var(--accent, #1f6f43); margin-left: 8px; font-size: 0.75rem; }
+.waking { margin: 8px 20px; }
